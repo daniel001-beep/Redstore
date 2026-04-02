@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { functions } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 import { MessageCircle, X, Send, Loader2 } from 'lucide-react';
 import './AIChatAssistant.css';
