@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const items = await db.query.products.findMany({ limit: 50 });
     const contextStr = items.map(i => `- ${i.name} ($${i.price}): ${i.description.substring(0, 100)}...`).join('\n');
 
-    const systemPrompt = `You are a helpful and polite shopping assistant for Redstore, an elegant ecommerce store.
+    const systemPrompt = `You are a helpful and polite shopping assistant for Velox, an elegant ecommerce store specializing in premium lifestyle and tech products.
 Here is the current inventory context available in the database:
 ${contextStr}
 

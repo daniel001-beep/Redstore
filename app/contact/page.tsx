@@ -37,19 +37,19 @@ export default function Contact() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] py-12 md:py-24">
-    <div className="container max-w-7xl mx-auto space-y-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#050505] py-16 md:py-32">
+    <div className="container max-w-7xl mx-auto space-y-16 px-4 sm:px-6 lg:px-8">
       {/* Intro Section */}
-      <section className="flex flex-col lg:flex-row gap-16">
-        <div className="lg:w-1/2 space-y-8">
+      <section className="flex flex-col lg:flex-row gap-20">
+        <div className="lg:w-1/2 space-y-10">
           <div>
             <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-6">Let's Chat!</h1>
-            <p className="text-lg text-gray-300">
+            <p className="text-lg text-gray-300 leading-relaxed">
               Got questions? We've got answers. Whether you need help with an order, want to suggest a new product, or just want to say hi - we're all ears.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-gray-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-gray-300">
             <div className="flex gap-4 items-start bg-white/5 p-6 rounded-2xl border border-white/10 hover:bg-white/10 transition cursor-default">
               <i className="fas fa-map-marker-alt text-2xl text-blue-500 mt-1"></i>
               <div>
@@ -68,7 +68,7 @@ export default function Contact() {
             </div>
 
             <div className="flex gap-4 items-start bg-white/5 p-6 rounded-2xl border border-white/10 hover:bg-white/10 transition cursor-default">
-              <i className="fas fa-envelope text-2xl text-purple-500 mt-1"></i>
+              <i className="fas fa-envelope text-2xl text-blue-500 mt-1"></i>
               <div>
                 <h3 className="font-bold text-white text-lg">Email Us</h3>
                 <p>support@Velox.com</p>

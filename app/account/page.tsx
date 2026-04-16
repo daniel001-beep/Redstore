@@ -43,10 +43,10 @@ export default function Account() {
     <div className="min-h-screen bg-[#050505] flex items-center justify-center px-4 md:px-0">
       <div className="w-full max-w-md">
         {/* Sign In / Profile Card */}
-        <div className="bg-linear-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 shadow-2xl">
           {/* Header */}
           <div className="mb-8 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-linear-to-br from-blue-500 to-purple-600 rounded-full mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
               <User className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">Account</h1>
@@ -62,7 +62,7 @@ export default function Account() {
             <button
               onClick={handleSignIn}
               disabled={loading || status === 'authenticated'}
-              className="w-full px-6 py-3 bg-linear-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/50 transition-all duration-300 disabled:opacity-50"
+              className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/50 transition-all duration-300 disabled:opacity-50"
             >
               {loading ? 'Redirecting...' : 'Sign In with Google'}
             </button>

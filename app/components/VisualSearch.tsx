@@ -45,21 +45,21 @@ export default function VisualSearch() {
             <input 
                 type="text" 
                 placeholder="Search for products..." 
-                className="w-full bg-white/10 backdrop-blur-md text-white rounded-full py-3 md:py-4 pl-10 md:pl-12 pr-20 border border-white/20 focus:border-blue-500 outline-none shadow-lg text-base transition-all focus:bg-white/15" 
+                className="w-full bg-white/10 text-white rounded-full py-3 md:py-4 pl-12 md:pl-14 pr-16 border-2 border-blue-500/40 focus:border-blue-500 outline-none shadow-lg text-base transition-all focus:bg-white/15 focus:ring-2 focus:ring-blue-500/30" 
             />
-            <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-400 transition-colors w-4 h-4 md:w-5 md:h-5" />
+            <Search className="absolute left-4 md:left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-400 transition-colors w-5 h-5" />
             <button 
                onClick={() => setVisualOpen(!visualOpen)} 
-               className={`absolute right-3 md:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full flex items-center justify-center w-9 h-9 ring-2 ring-offset-2 ring-offset-[#050505] transition-all duration-300 ${visualOpen ? 'bg-blue-500 text-white ring-blue-500' : 'text-gray-300 hover:text-white hover:bg-white/10 ring-white/20 hover:ring-blue-400'}`}
+               className={`absolute right-3 md:right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg flex items-center justify-center transition-all duration-300 ${visualOpen ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
                title="Visual Search with Camera - Click to snap & shop"
             >
-               <Camera className="w-5 h-5 md:w-5 md:h-5" />
+               <Camera className="w-5 h-5" />
             </button>
           </div>
       </div>
 
       {visualOpen && (
-        <div className="mt-6 glass-card p-6 rounded-2xl border border-blue-500/30 bg-blue-900/10 backdrop-blur-xl animate-fade-in relative shadow-2xl z-10">
+        <div className="mt-6 glass-card p-6 rounded-2xl border border-blue-500/30 bg-blue-900/10 animate-fade-in relative shadow-2xl z-10">
           <button onClick={() => setVisualOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white">
              <X size={20} />
           </button>

@@ -15,7 +15,7 @@ const AIChatAssistant = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '1', role: 'assistant', content: "Hello! I'm your Redstore shopping assistant. How can I help you today?" }
+    { id: '1', role: 'assistant', content: "Hello! I'm your Velox shopping assistant. How can I help you today?" }
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

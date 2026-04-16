@@ -4,7 +4,6 @@ import { InferSelectModel } from "drizzle-orm";
 import { db } from "@/src/db";
 import { products } from "@/src/db/schema";
 import ProductCard from "@/app/components/ProductCard";
-import Footer from "@/app/components/Footer";
 
 export type Product = Omit<InferSelectModel<typeof products>, "price"> & {
   price: number;
@@ -29,7 +28,7 @@ export default async function Home() {
       <div className="relative overflow-hidden bg-linear-to-br from-slate-900 via-[#050505] to-slate-950 py-32 md:py-40 shrink-0">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
         </div>
         
         <div className="relative container mx-auto px-4 text-center">
@@ -47,6 +46,78 @@ export default async function Home() {
               Learn More
             </Link>
           </div>
+        </div>
+      </div>
+
+      {/* Trust Bar Section */}
+      <div className="bg-white/5 border-y border-white/10 py-12">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <i className="fa fa-truck text-3xl text-blue-500 mb-3 block"></i>
+              <h3 className="text-lg font-semibold text-white mb-1">Free Shipping</h3>
+              <p className="text-gray-400 text-sm">Fast delivery within Abuja</p>
+            </div>
+            <div className="text-center">
+              <i className="fa fa-brain text-3xl text-blue-500 mb-3 block"></i>
+              <h3 className="text-lg font-semibold text-white mb-1">AI-Powered Search</h3>
+              <p className="text-gray-400 text-sm">Find what you need instantly</p>
+            </div>
+            <div className="text-center">
+              <i className="fa fa-lock text-3xl text-blue-500 mb-3 block"></i>
+              <h3 className="text-lg font-semibold text-white mb-1">Secure Payments</h3>
+              <p className="text-gray-400 text-sm">Protected transactions always</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Categories Section */}
+      <div className="container mx-auto px-4 py-20">
+        <div className="mb-12 text-center">
+          <h2 className="text-4xl font-bold text-white mb-3">Shop by Category</h2>
+          <p className="text-gray-400 text-lg">Browse our curated collections</p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Electronics */}
+          <Link href="/products" className="group relative overflow-hidden rounded-2xl h-72 cursor-pointer">
+            <img 
+              src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"
+              alt="Electronics"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            />
+            <div className="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors flex flex-col items-center justify-center">
+              <h3 className="text-2xl font-bold text-white mb-2">Electronics</h3>
+              <p className="text-gray-200 text-sm">Latest tech & gadgets</p>
+            </div>
+          </Link>
+
+          {/* Fashion */}
+          <Link href="/products" className="group relative overflow-hidden rounded-2xl h-72 cursor-pointer">
+            <img 
+              src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"
+              alt="Fashion"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            />
+            <div className="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors flex flex-col items-center justify-center">
+              <h3 className="text-2xl font-bold text-white mb-2">Fashion</h3>
+              <p className="text-gray-200 text-sm">Trendy & premium apparel</p>
+            </div>
+          </Link>
+
+          {/* Furniture */}
+          <Link href="/products" className="group relative overflow-hidden rounded-2xl h-72 cursor-pointer">
+            <img 
+              src="https://images.unsplash.com/photo-1555041469-a586c61ea9bc?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80"
+              alt="Furniture"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            />
+            <div className="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors flex flex-col items-center justify-center">
+              <h3 className="text-2xl font-bold text-white mb-2">Furniture</h3>
+              <p className="text-gray-200 text-sm">Comfort meets style</p>
+            </div>
+          </Link>
         </div>
       </div>
 
@@ -74,9 +145,6 @@ export default async function Home() {
           )}
         </div>
       </div>
-
-      {/* Footer */}
-      <Footer />
     </div>
   );
 }
