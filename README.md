@@ -1,4 +1,4 @@
-🏎️ Velox Store: Enterprise-Grade Financial Ledger Engine
+🏎️ Velox Fintech: Enterprise-Grade Financial Ledger Engine
 Architectural Migration: Vanilla JS → React + Supabase (RLS Audit)
 Built by a Software Engineer with a specialized background in Accounting.
 
@@ -37,6 +37,14 @@ I selected Supabase not just for its real-time capabilities, but for its native 
 Current Focus: Financial Edge Cases and Ledger Integrity
 
 Rather than optimizing for speed before functionality, the current phase focuses on securing the transactional integrity logic.
+
+Construction Phase: Sprint 2
+
+✅ 139+ Technical Clones / Peer Review (Complete)"
+
+​🏗️ Multi-Currency Reconciliation (In Progress)
+
+​🏗️ AI-Powered Fraud Detection via Gemini (In Progress)
 
 🚀 Upcoming Development Milestones (The "Ledger Audit" Phase)
 [ ] State Validation: Implementing advanced middleware to perform front-end ledger integrity checks before database commits.
@@ -120,10 +128,3 @@ https://github.com/daniel001-beep/Velox-Fintech.git
 
 ​This repository is under active development and is a prime demonstration of the technical foresight needed for scalable fintech systems.
 
-Construction Phase: Sprint 2
-
-✅ 139+ Technical Clones / Peer Review (Complete)"
-
-​🏗️ Multi-Currency Reconciliation (In Progress)
-
-​🏗️ AI-Powered Fraud Detection via Gemini (In Progress)
