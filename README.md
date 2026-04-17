@@ -20,7 +20,7 @@ Authentication: Dual support for Firebase Auth and Supabase Auth
 
 Deployment: Vercel (Production CI/CD Pipeline)
 
-🏗️ Key Architectural Design Decisions
+🏗️ Key Architectural Design Decisions 
 1. The React Migration: Declarative Financial UI
 
 The shift from Vanilla JS was driven by the critical requirement for a predictable, declarative state. By leveraging React's component model, I have effectively minimized manual DOM-manipulation bottlenecks. This refactor led to a measured 40% increase in rendering efficiency for core financial components like the real-time cart ledger.
@@ -54,8 +54,7 @@ Construction Phase: Sprint 2
 [ ] AI-Driven Reconciliation: (Future) Integration of AI-agents (Cursor/Antigravity) to audit transaction logs for discrepancies.
 
 💻 Local Development Setup
-Clone the repository: git clone https://github.com/danie0
-001-beep/velox-Fintech.git
+Clone the repository: git clone https://github.com/danie001-beep/velox-Fintech.git
 
 Install dependencies: npm install
 
