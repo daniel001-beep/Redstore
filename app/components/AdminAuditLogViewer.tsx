@@ -285,27 +285,27 @@ export default function AdminAuditLogViewer() {
                             {new Date(log.timestamp).toLocaleString()}
                           </td>
                           <td className="px-6 py-3 text-gray-400 font-mono text-xs">
-                            {log.user_id.substring(0, 8)}...
+                            {log.userId.substring(0, 8)}...
                           </td>
                           <td className="px-6 py-3">
                             <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded text-xs font-semibold">
-                              {log.event_type}
+                              {log.eventType}
                             </span>
                           </td>
                           <td className="px-6 py-3 text-gray-400">
-                            {log.entity_type} #{log.entity_id}
+                            {log.entityType} #{log.entityId}
                           </td>
                           <td className="px-6 py-3 text-gray-400 font-mono text-xs">
-                            {log.ip_address}
+                            {log.ipAddress}
                           </td>
                           <td className="px-6 py-3">
                             <details className="cursor-pointer">
                               <summary className="text-xs font-mono text-gray-500 hover:text-gray-300">
-                                {log.change_hash.substring(0, 16)}...
+                                {log.changeHash.substring(0, 16)}...
                               </summary>
                               <div className="mt-2 p-2 bg-black/50 rounded text-xs text-gray-400">
                                 <p className="font-mono">
-                                  SHA256: {log.change_hash}
+                                  SHA256: {log.changeHash}
                                 </p>
                               </div>
                             </details>

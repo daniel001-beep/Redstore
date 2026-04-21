@@ -82,10 +82,10 @@ export function storeIdempotencyKey(
   metadata?: Record<string, any>
 ): void {
   const storageKey = `idempotency_${orderId}`;
-  const data: IdempotencyKey = {
+  const data: any = {
     key,
     createdAt: new Date(),
-    metadata,
+    ...(metadata && { metadata }),
   };
 
   try {

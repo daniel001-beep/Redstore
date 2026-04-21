@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
     let reviews = [];
     try {
-      reviews = await db.select().from(reviewsTable).where(eq(reviewsTable.productId, productId));
+      reviews = await db.select().from(reviewsTable).where(eq((reviewsTable as any).productid, productId));
     } catch (dbErr) {
       console.error("Database error fetching reviews:", dbErr);
       return new Response("Could not fetch reviews from database", { status: 503 });

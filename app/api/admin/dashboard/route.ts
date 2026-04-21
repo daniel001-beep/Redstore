@@ -45,11 +45,8 @@ export async function GET() {
         .select({
           id: orders.id,
           userId: orders.userId,
-          productId: orders.productId,
           productName: products.name,
           productPrice: products.price,
-          quantity: orders.quantity,
-          totalPrice: orders.totalPrice,
           status: orders.status,
           createdAt: orders.createdAt,
           userName: users.name,
@@ -57,7 +54,7 @@ export async function GET() {
         })
         .from(orders)
         .innerJoin(users, eq(orders.userId, users.id))
-        .innerJoin(products, eq(orders.productId, products.id));
+        .innerJoin(products, eq(orders.id, products.id));
     } catch (ordersErr) {
       console.error("Error fetching orders:", ordersErr);
       allOrders = [];

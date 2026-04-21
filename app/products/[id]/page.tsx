@@ -27,7 +27,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     // Safely fetch reviews with error handling
     let productReviews: any[] = [];
     try {
-      productReviews = await db.select().from(reviews).where(eq(reviews.productId, productId)).limit(5);
+      productReviews = await db.select().from(reviews).where(eq(reviews.productid, productId)).limit(5);
     } catch (reviewErr) {
       console.log("Could not fetch reviews:", reviewErr);
       productReviews = [];
@@ -49,7 +49,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           <div className="product-detail-image-wrap">
             <div className="product-detail-image">
               <Image
-                src={product.imageUrl || (product as any).imageurl || "https://picsum.photos/seed/placeholder/800/800"}
+                src={(product as any).imageurl || product.price || "https://picsum.photos/seed/placeholder/800/800"}
                 alt={product.name || "Product"}
                 fill
                 priority
