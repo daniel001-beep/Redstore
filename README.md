@@ -28,6 +28,7 @@ Key Features
 
 ✅ User Accounts - Secure profile management and session handling
 ​
+
 🏗️ Architecture
 
 ​The Engineering Edge: Financial Integrity
@@ -54,6 +55,7 @@ Key Features
 
 ​Transaction State Tracking: Monitoring the lifecycle from pending to completed with immutable records.
 ​
+
 🔐 Security Measures
 
 ​1. Compliance-First Engineering
