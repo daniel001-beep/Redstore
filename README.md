@@ -1,4 +1,6 @@
-​🏎️ Velox Fintech: Enterprise-Grade Financial Ledger Engine
+# 🏎️ Velox Fintech: Enterprise-Grade Financial Ledger Engine
+### Architectural Migration: Vanilla JS → Next.js + Supabase (RLS Audit)
+**Built by a Systems Architect with a specialized background in Accounting.**
 
 Enterprise Financial Platform with Real-Time Portfolio Management, Secure Transactions, and AI-Powered Insights.
 
