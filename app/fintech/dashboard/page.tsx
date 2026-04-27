@@ -1,240 +1,274 @@
 'use client';
 
-import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Activity, Zap, BarChart3 } from 'lucide-react';
+import React from 'react';
+import { TrendingUp, TrendingDown, Activity, Info } from 'lucide-react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-
-interface KPIData {
-  label: string;
-  value: string;
-  change: string;
-  isPositive: boolean;
-  icon: React.ElementType;
-}
+import AssetAllocation from '@/app/components/AssetAllocation';
 
 export default function DashboardPage() {
-  const [selectedTimeframe, setSelectedTimeframe] = useState('24h');
-
-  const kpiData: KPIData[] = [
+  // Portfolio stat cards
+  const statCards = [
     {
       label: 'Total Balance',
-      value: '$2,847,391.52',
-      change: '+12.85%',
-      isPositive: true,
-      icon: BarChart3,
+      value: '$2,847,392.50',
+      subtext: '+$12,430 today',
+      icon: TrendingUp,
+      color: '#22c55e',
     },
     {
       label: 'Net Position',
-      value: '+$485,920.34',
-      change: '+4.23%',
-      isPositive: true,
+      value: '+$485,920.00',
+      subtext: '+20.58% overall return',
       icon: TrendingUp,
+      color: '#22c55e',
     },
     {
       label: 'Monthly Yield',
       value: '4.28%',
-      change: '+0.67%',
-      isPositive: true,
-      icon: Zap,
+      subtext: 'Above market avg by 1.2%',
+      icon: TrendingUp,
+      color: '#22c55e',
+    },
+    {
+      label: 'Active Assets',
+      value: '34 Positions',
+      subtext: 'Across 8 asset classes',
+      icon: Info,
+      color: '#3b82f6',
     },
   ];
 
-  // Mock transaction data
+  // Top holdings data
+  const topHoldings = [
+    {
+      asset: 'Apple Inc.',
+      ticker: 'AAPL',
+      value: '$324,500',
+      change: '+2.4%',
+      weight: '11.4%',
+      isPositive: true,
+    },
+    {
+      asset: 'US Treasury Bond 10Y',
+      ticker: 'UST10',
+      value: '$280,000',
+      change: '+0.3%',
+      weight: '9.8%',
+      isPositive: true,
+    },
+    {
+      asset: 'Microsoft Corp',
+      ticker: 'MSFT',
+      value: '$215,300',
+      change: '+1.8%',
+      weight: '7.6%',
+      isPositive: true,
+    },
+    {
+      asset: 'Vanguard Real Estate ETF',
+      ticker: 'VNQ',
+      value: '$140,200',
+      change: '-0.5%',
+      weight: '4.9%',
+      isPositive: false,
+    },
+    {
+      asset: 'Gold Futures',
+      ticker: 'XAUUSD',
+      value: '$98,700',
+      change: '+1.1%',
+      weight: '3.5%',
+      isPositive: true,
+    },
+  ];
+
+  // Recent transactions
   const recentTransactions = [
     {
       id: 'TXN-001',
       type: 'TRANSFER',
       description: 'Wire to Checking Account',
       amount: '-$25,000.00',
-      amountRaw: 25000,
       status: 'completed',
-      timestamp: '2025-04-17 14:32:05',
     },
     {
       id: 'TXN-002',
       type: 'DEPOSIT',
       description: 'Deposit from Wire',
       amount: '+$50,000.00',
-      amountRaw: 50000,
       status: 'completed',
-      timestamp: '2025-04-17 13:15:42',
     },
     {
       id: 'TXN-003',
-      type: 'DIVIDEND',
-      description: 'Quarterly Dividend Payment',
-      amount: '+$12,150.75',
-      amountRaw: 12150.75,
+      type: 'TRANSFER',
+      description: 'Multi-Currency Exchange',
+      amount: '-$15,000.00',
       status: 'completed',
-      timestamp: '2025-04-17 09:45:18',
     },
     {
       id: 'TXN-004',
-      type: 'FEE',
-      description: 'Platform Maintenance Fee',
-      amount: '-$100.00',
-      amountRaw: 100,
-      status: 'pending',
-      timestamp: '2025-04-17 08:12:33',
+      type: 'BUY',
+      description: 'Apple Inc. AAPL x50',
+      amount: '-$8,750.00',
+      status: 'completed',
     },
     {
       id: 'TXN-005',
-      type: 'TRANSFER',
-      description: 'Multi-Currency Exchange',
-      amount: '-€15,000.00',
-      amountRaw: 15000,
-      status: 'completed',
-      timestamp: '2025-04-16 16:44:22',
+      type: 'DIVIDEND',
+      description: 'MSFT Quarterly Dividend',
+      amount: '+$1,240.00',
+      status: 'pending',
     },
   ];
 
   return (
-    <DashboardLayout activeTab="dashboard">
-      {/* Main Content */}
-      <div className="min-h-screen bg-base-bg">
-        {/* Header */}
-        <div className="border-b border-[rgba(99,91,255,0.1)] px-8 py-6">
-          <div className="flex items-center justify-between">
+    <DashboardLayout>
+      <div className="min-h-screen bg-slate-950 pt-4">
+        {/* Header with live indicator */}
+        <div className="border-b border-slate-700 pb-6 mb-8">
+          <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-white mb-1">
-                Dashboard
-              </h1>
-              <p className="text-text-secondary">
-                Real-time portfolio insight and transaction ledger
-              </p>
+              <h1 className="text-4xl font-bold text-slate-100 mb-2">Portfolio Dashboard</h1>
+              <p className="text-slate-400">Real-time portfolio analytics and transaction history</p>
             </div>
-            <div className="flex gap-2">
-              {['24h', '7d', '30d', '90d'].map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setSelectedTimeframe(tf)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    selectedTimeframe === tf
-                      ? 'bg-[#635BFF] text-white'
-                    : 'bg-[rgba(99,91,255,0.1)] text-text-secondary hover:bg-[rgba(99,91,255,0.15)]'
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium text-green-400">Live</span>
             </div>
+          </div>
+          <p className="text-xs text-slate-500">Last synced: just now</p>
+        </div>
+
+        {/* Portfolio Stats Grid - 4 Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+          {statCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.label}
+                className="bg-slate-800 border border-slate-700 rounded-xl p-6 hover:border-slate-600 transition-all duration-200"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+                    {card.label}
+                  </span>
+                  <Icon className="w-4 h-4" style={{ color: card.color }} />
+                </div>
+                <p className="text-3xl font-bold text-slate-100 mb-2">{card.value}</p>
+                <p className="text-sm text-slate-400">{card.subtext}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Asset Allocation Section */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 mb-8">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6">Asset Allocation</h2>
+          <AssetAllocation />
+        </div>
+
+        {/* Top Holdings Table */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 mb-8">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6">Top Holdings</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Asset
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Ticker
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Value
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Change
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Weight
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {topHoldings.map((holding, idx) => (
+                  <tr
+                    key={holding.ticker}
+                    className={`border-b border-slate-700 ${idx % 2 === 0 ? 'bg-slate-900/30' : ''}`}
+                  >
+                    <td className="py-4 px-4 text-slate-200 font-medium">{holding.asset}</td>
+                    <td className="py-4 px-4 font-mono text-slate-400">{holding.ticker}</td>
+                    <td className="py-4 px-4 text-right font-mono text-slate-100">{holding.value}</td>
+                    <td
+                      className={`py-4 px-4 text-right font-mono font-semibold ${
+                        holding.isPositive ? 'text-green-400' : 'text-red-400'
+                      }`}
+                    >
+                      {holding.change}
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono text-slate-400">{holding.weight}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Content Bento Grid */}
-        <div className="bento-grid">
-          {/* KPI Cards - 2x2 Section */}
-          <div className="bento-item bento-item-2x2 glass-panel-strong">
-            <h2 className="text-lg font-bold text-white mb-6">Portfolio Overview</h2>
-            <div className="grid grid-cols-3 gap-4 h-full">
-              {kpiData.map((kpi) => {
-                const Icon = kpi.icon;
-                
-                return (
-                  <div
-                    key={kpi.label}
-                    className="glass-panel p-4 flex flex-col justify-between hover:bg-[rgba(99,91,255,0.08)] transition-all"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Icon className="w-4 h-4 text-[#635BFF]" />
-                        <span className="kpi-label">{kpi.label}</span>
-                      </div>
-                      <p className="kpi-value">{kpi.value}</p>
-                    </div>
-                    <div className={`kpi-change ${kpi.isPositive ? 'positive' : 'negative'}`}>
-                      {kpi.isPositive ? (
-                        <TrendingUp className="w-3 h-3" />
-                      ) : (
-                        <TrendingDown className="w-3 h-3" />
-                      )}
-                      {kpi.change}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* AI Agent Pulse - 1x1 */}
-          <div className="bento-item bento-item-1x1 glass-panel-strong flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-3 h-3 bg-[#00FFC2] rounded-full pulse-active"></div>
-                <h3 className="text-sm font-bold text-white">AI Agent</h3>
-              </div>
-              <p className="text-xs text-text-secondary leading-relaxed">
-                Fraud Detection Model: Active
-              </p>
-            </div>
-            <div className="mt-4 p-3 bg-[rgba(0,255,194,0.05)] border border-[rgba(0,255,194,0.1)] rounded-lg">
-              <p className="text-xs text-[#00FFC2] typewriter">
-                Monitoring 847 transactions...
-              </p>
-            </div>
-          </div>
-
-          {/* Real-Time Transaction Feed - 2x1 */}
-          <div className="bento-item bento-item-2x1 glass-panel-strong flex flex-col">
-            <h3 className="text-lg font-bold text-white mb-4">Recent Transactions</h3>
-            
-            <div className="overflow-x-auto flex-1">
-              <table className="transaction-table w-full">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Time</th>
+        {/* Recent Transactions */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8">
+          <h2 className="text-2xl font-bold text-slate-100 mb-6">Recent Transactions</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    ID
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Description
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Amount
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentTransactions.map((tx) => (
+                  <tr key={tx.id} className="border-b border-slate-700">
+                    <td className="py-4 px-4 font-mono text-slate-300 text-sm">{tx.id}</td>
+                    <td className="py-4 px-4 text-slate-200 font-medium text-sm">{tx.type}</td>
+                    <td className="py-4 px-4 text-slate-400 text-sm">{tx.description}</td>
+                    <td
+                      className={`py-4 px-4 text-right font-mono font-semibold text-sm ${
+                        tx.amount.startsWith('+') ? 'text-green-400' : 'text-slate-100'
+                      }`}
+                    >
+                      {tx.amount}
+                    </td>
+                    <td className="py-4 px-4">
+                      <span
+                        className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                          tx.status === 'completed'
+                            ? 'bg-green-900 text-green-400'
+                            : tx.status === 'pending'
+                              ? 'bg-yellow-900 text-yellow-400'
+                              : 'bg-red-900 text-red-400'
+                        }`}
+                      >
+                        {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                      </span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {recentTransactions.map((tx) => (
-                    <tr key={tx.id}>
-                      <td className="text-electric-pulse">{tx.id}</td>
-                      <td className="font-semibold">{tx.type}</td>
-                      <td className="text-text-secondary">{tx.description}</td>
-                      <td className={tx.amount.startsWith('+') ? 'text-carbon-mint' : 'text-negative'}>
-                        {tx.amount}
-                      </td>
-                      <td>
-                        <span className={`status-badge status-${tx.status}`}>
-                          {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="text-xs text-text-tertiary">{tx.timestamp}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* System Status - 1x1 */}
-          <div className="bento-item bento-item-1x1 glass-panel-strong">
-            <h3 className="text-sm font-bold text-white mb-4">System Health</h3>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-text-secondary">API Uptime</span>
-                  <span className="text-xs text-[#00FFC2] font-semibold">99.99%</span>
-                </div>
-                <div className="w-full h-1.5 bg-[rgba(99,91,255,0.1)] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#00FFC2] rounded-full" style={{ width: '99.99%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-text-secondary">Ledger Sync</span>
-                  <span className="text-xs text-[#00FFC2] font-semibold">100%</span>
-                </div>
-                <div className="w-full h-1.5 bg-[rgba(99,91,255,0.1)] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#00FFC2] rounded-full" style={{ width: '100%' }}></div>
-                </div>
-              </div>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

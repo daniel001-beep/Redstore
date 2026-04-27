@@ -13,12 +13,8 @@ export default function FintechLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
-        <Providers>
-          {children}
-        </Providers>
-      </body>
-    </html>
+    <div>
+      <main className="pt-16">{children}</main>
+    </div>
   );
 }

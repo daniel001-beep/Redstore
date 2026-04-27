@@ -329,6 +329,10 @@ a, a:hover, a:focus, a:active {
     color: oklch(75.3% 0.020 265);
     text-transform: uppercase;
     margin-bottom: 12px;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .kpi-value {
@@ -337,6 +341,10 @@ a, a:hover, a:focus, a:active {
     font-weight: 600;
     color: #00FFC2;
     margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
 }
 
 .kpi-change {
@@ -345,6 +353,9 @@ a, a:hover, a:focus, a:active {
     display: flex;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .kpi-change.positive {

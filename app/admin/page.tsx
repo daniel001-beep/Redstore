@@ -43,8 +43,14 @@ export default function AdminDashboard() {
   const [selectedTab, setSelectedTab] = useState<"users" | "orders">("users");
 
   useEffect(() => {
+    // Redirect if not authenticated or not admin
     if (status === "unauthenticated") {
-      router.push("/account");
+      router.push("/auth/signin?callbackUrl=/admin");
+      return;
+    }
+
+    if (status === "authenticated" && !session?.user?.isAdmin) {
+      router.push("/fintech/dashboard");
       return;
     }
 

@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import AIChatAssistant from "./components/AIChatAssistant";
 import { Providers } from "./components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Velox - Premium E-Commerce Store",
-  description: "Shop our curated collection of premium products. Free shipping and secure checkout.",
+  title: "Velox Fintech - Premium Financial Platform",
+  description: "Enterprise-grade fintech platform with real-time portfolio management, secure transactions, and AI-powered insights.",
 };
 
 export default function RootLayout({
@@ -21,9 +20,8 @@ export default function RootLayout({
         <Providers>
           <div className="min-h-screen flex grow flex-col">
             <Navbar />
-            <main className="grow">{children}</main>
+            <main className="grow pt-16">{children}</main>
             <Footer />
-            <AIChatAssistant />
           </div>
         </Providers>
       </body>
