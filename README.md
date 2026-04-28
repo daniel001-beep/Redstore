@@ -27,6 +27,7 @@ Key Features
 ✅ Authentication - NextAuth.js v5 with Google OAuth integration
 
 ✅ User Accounts - Secure profile management and session handling
+
 ​
 🏗️ Architecture
 
@@ -38,6 +39,8 @@ Key Features
 ​Row Level Security (RLS)
 
 ​Pattern: User-based data isolation at the database level
+
+
 ​Implementation:
 
 ​Orders Table - Strictly filtered by user ID to prevent cross-user data leakage.
@@ -54,6 +57,7 @@ Key Features
 
 ​Transaction State Tracking: Monitoring the lifecycle from pending to completed with immutable records.
 ​
+
 🔐 Security Measures
 
 ​1. Compliance-First Engineering
