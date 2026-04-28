@@ -109,3 +109,9 @@ src="https://c.statcounter.com/13224610/0/0e8701a6/0/"
 alt="free web stats"
 referrerPolicy="no-referrer-when-downgrade"></a></div></noscript>
 <!-- End of Statcounter Code -->
+
+<div align="center">
+  <a title="Web Analytics" href="https://statcounter.com/" target="_blank">
+    <img src="https://c.statcounter.com/13224610/0/0e8701a6/1/" alt="Web Analytics" referrerpolicy="no-referrer-when-downgrade">
+  </a>
+</div>
