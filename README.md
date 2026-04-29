@@ -94,8 +94,5 @@ Key Features
 ​Last Updated: April 27, 2026
 Status: Hardened & Production Ready ✅
 License: Proprietary - Velox Fintech
-<div style="display: none;">
-<a title="statcounter" href="https://statcounter.com/" target="_blank">
-<img src="https://c.statcounter.com/13224610/0/0e8701a6/1/" style="border:none;">
-</a>
-</div>
+[![Support](https://c.statcounter.com/13224610/0/0e8701a6/1/)](https://statcounter.com/)
+
