@@ -40,7 +40,7 @@ This architecture has been **cloned and audited by 800+ developers** on GitHub. 
 ## 🚀 Roadmap to Demo Day (June 16)
 * [x] **Hardened Ledger:** Full RLS and Atomic Transaction logic.
 * [ ] **Stripe Connect:** Multi-currency cross-border settlement.
-* [ ] **AI Fraud Detection:** Real-time anomaly detection using the M2 Pro’s Neural Engine.
+* [ ] **AI Fraud Detection: Real-time anomaly detection using specialized Neural Engine inference for sub-10ms pattern recognition.
 
 ---
-**License:** Proprietary - Velox Fintech | Built by [Idowu Daniel](https://github.com/daniel001-beep)
+**License:** Proprietary - Velox Fintech | Built by [Idowu Daniel](idowuisdaniel1@gmail.com?subject=Inquiry%20regarding%20Velox%20Fintech%20Architecture)
