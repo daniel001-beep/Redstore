@@ -1,7 +1,7 @@
 # 🏎️ Velox Fintech: High-Concurrency Financial Ledger
 **Engineered for Atomic Integrity & SOC 2 Compliance Standards**
 
-[![GitHub Clones](https://img.shields.io/badge/Clones-800%2B-blueviolet)](https://github.com/daniel001-beep/Velox-Fintech)
+[![GitHub Clones](https://img.shields.io/badge/Clones-800%2B-blueviolet)](https://github.com/daniel001-beep/Velox-Fintech/graphs/traffic)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
 [![Supabase RLS](https://img.shields.io/badge/Security-RLS%20Hardened-green)](https://supabase.com/)
 
