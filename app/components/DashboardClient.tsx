@@ -50,6 +50,8 @@ export default function DashboardClient({
 
   // --- REAL-TIME SUBSCRIPTION ---
   useEffect(() => {
+    if (!supabase) return;
+
     const channel = supabase
       .channel('schema-db-changes')
       .on(

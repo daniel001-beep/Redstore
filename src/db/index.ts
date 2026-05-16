@@ -4,27 +4,23 @@ import * as schema from "./schema";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-// For Vercel/Serverless, we want to handle connections carefully to avoid exhaustion
 let dbInstance: any;
 
 if (isProduction) {
-  // In production, we use the non-pooling URL for migrations or long-running tasks, 
-  // but for the app, we usually use the pooling one. 
-  // However, for pure serverless, sometimes a single Client is better if not using a pooler.
-  const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
-  
-  const pool = new Pool({
-    connectionString,
+  // CRITICAL: Force ignore self-signed certificates for Supabase on Vercel
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+  const client = new Client({
+    connectionString: process.env.POSTGRES_URL,
     ssl: {
-      rejectUnauthorized: false, // Standard for Supabase
+      rejectUnauthorized: false,
     },
-    max: 1, // Keep it low for serverless
-    connectionTimeoutMillis: 10000,
   });
   
-  dbInstance = drizzle(pool, { schema });
+  client.connect().catch(err => console.error("Production DB Connect Error:", err));
+  dbInstance = drizzle(client, { schema });
 } else {
-  // Development: Persistent pool
+  // Development: Standard pool
   if (!(global as any).db) {
     const pool = new Pool({
       connectionString: process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL,
@@ -32,9 +28,6 @@ if (isProduction) {
         rejectUnauthorized: false,
       },
       max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 60000, // 60s for severe network instability
-      query_timeout: 30000, // 30s query timeout
     });
     
     (global as any).db = drizzle(pool, { schema });

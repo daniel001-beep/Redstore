@@ -5,11 +5,14 @@ import Footer from "./components/Footer";
 import { Providers } from "./components/Providers";
 import "./globals.css";
 
+import { getBaseUrl } from "@/src/lib/url-utils";
+
 // Using system fonts as fallback for network-restricted environments
 const geistSans = { variable: "--font-geist-sans" };
 const geistMono = { variable: "--font-geist-mono" };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getBaseUrl()),
   title: "Velox Fintech - Enterprise Financial Platform",
   description: "Enterprise-grade financial infrastructure with real-time portfolio management, secure transactions, and AI-powered insights.",
 };

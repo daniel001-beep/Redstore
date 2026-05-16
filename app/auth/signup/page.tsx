@@ -104,10 +104,10 @@ export default function SignUp() {
 
         {/* Right Section: Sign Up Card */}
         <div className="w-full max-w-md mx-auto md:ml-auto">
-          <div className="bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] text-center">
-            <div className="mb-10">
-              <h3 className="text-3xl font-bold text-white mb-2">Create Account</h3>
-              <p className="text-slate-400 font-medium">Provision your founder credentials</p>
+          <div className="bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] text-center">
+            <div className="mb-6 md:mb-10">
+              <h3 className="text-2xl md:text-3xl font-bold text-white mb-2">Create Account</h3>
+              <p className="text-slate-400 text-sm md:text-base font-medium">Provision your founder credentials</p>
             </div>
 
             {error && (
@@ -116,7 +116,7 @@ export default function SignUp() {
               </div>
             )}
 
-            <form onSubmit={handleSignUp} className="space-y-6">
+            <form onSubmit={handleSignUp} className="space-y-4 md:space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] block">Full Name</label>
                 <div className="relative group">
@@ -126,7 +126,7 @@ export default function SignUp() {
                     placeholder="Enter your name" 
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl py-4 px-4 text-center text-slate-100 placeholder-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-medium text-lg"
+                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl py-3 md:py-4 px-4 text-center text-slate-100 placeholder-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-medium text-base md:text-lg"
                     disabled={isLoading}
                   />
                 </div>
@@ -141,7 +141,7 @@ export default function SignUp() {
                     placeholder="founder@velox.com" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl py-4 px-4 text-center text-slate-100 placeholder-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-medium text-lg"
+                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl py-3 md:py-4 px-4 text-center text-slate-100 placeholder-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-medium text-base md:text-lg"
                     disabled={isLoading}
                   />
                 </div>
@@ -156,20 +156,22 @@ export default function SignUp() {
                     placeholder="••••••••" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl py-4 px-4 text-center text-slate-100 placeholder-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-medium text-lg"
+                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl py-3 md:py-4 px-4 text-center text-slate-100 placeholder-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-medium text-base md:text-lg"
                     disabled={isLoading}
                   />
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-2 md:pt-4 flex justify-center">
                 <button
                   type="submit"
                   disabled={isLoading || !email || !password}
-                  className="w-full h-16 flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-lg uppercase tracking-wider rounded-2xl shadow-lg shadow-blue-600/20 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98]"
+                  className="px-10 h-12 md:h-14 flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm md:text-base uppercase tracking-wider rounded-2xl shadow-lg shadow-blue-600/20 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98]"
                 >
                   {isLoading ? (
-                    <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
                   ) : (
                     <>
                       Create Executive Account <ArrowRight className="w-5 h-5" />
@@ -179,8 +181,8 @@ export default function SignUp() {
               </div>
             </form>
 
-            <div className="mt-8 pt-8 border-t border-white/5">
-              <p className="text-sm text-slate-500 font-medium">
+            <div className="mt-6 md:mt-8 pt-6 md:pt-8 border-t border-white/5">
+              <p className="text-xs md:text-sm text-slate-500 font-medium">
                 Already have an account?{' '}
                 <Link href="/auth/signin" className="text-blue-500 hover:text-blue-400 font-bold transition-colors">
                   Login here
@@ -189,7 +191,7 @@ export default function SignUp() {
             </div>
           </div>
 
-          <p className="text-center text-slate-700 text-[10px] uppercase tracking-[0.3em] mt-10 font-black">
+          <p className="text-center text-slate-700 text-[9px] md:text-[10px] uppercase tracking-[0.3em] mt-8 md:mt-10 font-black">
             Hardened by Velox Sentinel v2.4
           </p>
         </div>

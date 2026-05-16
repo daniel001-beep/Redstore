@@ -13,6 +13,10 @@ import { revalidatePath } from 'next/cache';
  */
 export async function createTransaction(formData: FormData) {
   const supabase = await createClient();
+  
+  if (!supabase) {
+    return { success: false, error: 'System configuration error: Supabase keys missing.' };
+  }
 
   // 1. Verify Authentication
   const { data: { user }, error: authError } = await supabase.auth.getUser();
