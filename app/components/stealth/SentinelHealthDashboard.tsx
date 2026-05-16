@@ -115,7 +115,7 @@ function StatusRing({
   );
 }
 
-function VerificationLog({ checks }: { checks: string[] }) {
+function VerificationLog({ checks, timestamps }: { checks: string[]; timestamps: string[] }) {
   return (
     <div className="space-y-1.5 max-h-48 overflow-hidden">
       {checks.map((check, i) => (
@@ -128,12 +128,7 @@ function VerificationLog({ checks }: { checks: string[] }) {
         >
           <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
           <span className="text-slate-500 shrink-0 tabular-nums">
-            {new Date().toLocaleTimeString("en-US", {
-              hour12: false,
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })}
+            {timestamps[i] ?? "--:--:--"}
           </span>
           <span className="text-slate-400 truncate">{check}</span>
         </motion.div>
@@ -142,12 +137,21 @@ function VerificationLog({ checks }: { checks: string[] }) {
   );
 }
 
+function getTimestamp(): string {
+  return new Date().toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 export default function SentinelHealthDashboard() {
   const [state, setState] = useState<IntegrityState>({
     hashChainValid: true,
     blocksVerified: 847293,
     totalBlocks: 847300,
-    lastVerifiedHash: generateHash(),
+    lastVerifiedHash: "0x1a3e7c9b2f04",
     verificationRate: 12847,
     integrityScore: 99.8,
     threatLevel: "none",
@@ -159,11 +163,22 @@ export default function SentinelHealthDashboard() {
       "Temporal consistency check: PASS",
     ],
   });
+  const [timestamps, setTimestamps] = useState<string[]>([
+    "--:--:--",
+    "--:--:--",
+    "--:--:--",
+    "--:--:--",
+    "--:--:--",
+  ]);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    // Hydrate initial timestamps on client
+    setTimestamps(state.activeChecks.map(() => getTimestamp()));
+
     intervalRef.current = setInterval(() => {
+      const ts = getTimestamp();
       setState((prev) => {
         const newBlock = prev.blocksVerified + Math.floor(Math.random() * 3) + 1;
         const checkMessages = [
@@ -188,11 +203,13 @@ export default function SentinelHealthDashboard() {
           activeChecks: [newCheck, ...prev.activeChecks].slice(0, 6),
         };
       });
+      setTimestamps((prev) => [ts, ...prev].slice(0, 6));
     }, 2200);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -300,7 +317,7 @@ export default function SentinelHealthDashboard() {
             </div>
 
             <div className="flex-1">
-              <VerificationLog checks={state.activeChecks} />
+              <VerificationLog checks={state.activeChecks} timestamps={timestamps} />
             </div>
 
             {/* Security modules */}

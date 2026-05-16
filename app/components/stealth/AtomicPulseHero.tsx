@@ -203,13 +203,26 @@ export default function AtomicPulseHero() {
     <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden px-4 py-24">
       <GridBackground />
 
-      {/* Particles */}
-      {Array.from({ length: 12 }).map((_, i) => (
+      {/* Particles - deterministic positions to avoid hydration mismatch */}
+      {[
+        { x: 15, d: 8.2 },
+        { x: 72, d: 7.5 },
+        { x: 33, d: 9.1 },
+        { x: 58, d: 6.8 },
+        { x: 84, d: 7.9 },
+        { x: 22, d: 8.6 },
+        { x: 47, d: 6.3 },
+        { x: 91, d: 9.4 },
+        { x: 12, d: 7.1 },
+        { x: 66, d: 8.8 },
+        { x: 39, d: 6.5 },
+        { x: 78, d: 9.7 },
+      ].map((p, i) => (
         <FloatingParticle
           key={i}
           delay={i * 0.8}
-          x={10 + Math.random() * 80}
-          duration={6 + Math.random() * 4}
+          x={p.x}
+          duration={p.d}
         />
       ))}
 
