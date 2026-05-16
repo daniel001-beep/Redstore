@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
 import { Providers } from "./components/Providers";
 import "./globals.css";
 
@@ -16,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Velox Fintech - Enterprise Financial Platform",
-  description: "Enterprise-grade financial infrastructure with real-time portfolio management, secure transactions, and AI-powered insights.",
+  title: "Velox - Next-Gen Fintech Ledger Infrastructure",
+  description:
+    "Zero-latency, double-entry ledger infrastructure. Immutable, hash-chained transactions for mission-critical financial systems.",
 };
 
 export default function RootLayout({
@@ -26,15 +25,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <body className="min-h-screen bg-slate-950">
-        <Providers>
-          <div className="min-h-screen flex grow flex-col">
-            <Navbar />
-            <main className="grow pt-16">{children}</main>
-            <Footer />
-          </div>
-        </Providers>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#020617]`}
+    >
+      <body className="min-h-screen bg-[#020617] text-slate-200">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
