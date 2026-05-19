@@ -1,190 +1,182 @@
 "use client";
 
 import Link from 'next/link';
-import { BarChart3, DollarSign, Lock, Server, User, LogOut, TrendingDown } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { 
+  LayoutDashboard, 
+  Database, 
+  ArrowLeftRight, 
+  FileSpreadsheet, 
+  BookOpen, 
+  BarChart3, 
+  LogOut, 
+  Menu,
+  X,
+  ShieldCheck
+} from 'lucide-react';
 import React, { useState } from 'react';
-import { useSession, signOut } from 'next-auth/react';
-import VeloxLogo from './VeloxLogo';
+import { useSession, useSignOut } from '@/app/context/AuthContext';
 
 const Navbar = () => {
   const { data: session } = useSession();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const signOut = useSignOut();
+  const pathname = usePathname();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Links mapped exactly to the sure+ sidebar, using working fintech routes
   const navLinks = [
-    { href: '/fintech/dashboard', label: 'Dashboard', icon: BarChart3 },
-    { href: '/fintech/runway', label: 'Runway', icon: TrendingDown },
-    { href: '/fintech/marketplace', label: 'Marketplace', icon: DollarSign },
-    { href: '/fintech/ledger', label: 'Ledger', icon: BarChart3 },
-    { href: '/fintech/developer', label: 'Developer API', icon: Server },
-    { href: '/fintech/security', label: 'Security', icon: Lock },
+    { href: '/fintech/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/fintech/master-data', label: 'Master Data', icon: Database },
+    { href: '/fintech/bank-mutation', label: 'Bank Mutation', icon: ArrowLeftRight },
+    { href: '/fintech/financial-documents', label: 'Financial Documents', icon: FileSpreadsheet },
+    { href: '/fintech/journals', label: 'Journals', icon: BookOpen },
+    { href: '/fintech/reports', label: 'Reports', icon: BarChart3 },
   ];
 
+  const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+  const showAdminLink = session?.user?.isAdmin || (adminEmail && session?.user?.email?.toLowerCase().trim() === adminEmail);
+  if (showAdminLink) {
+    navLinks.push({ href: '/fintech/admin', label: 'Admin Console', icon: ShieldCheck });
+  }
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800 transition-all duration-200">
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
-        <Link href="/fintech/dashboard" className="shrink-0 no-underline hover:opacity-80 transition-opacity">
-          <VeloxLogo size={32} />
-        </Link>
-        {/* Desktop Nav */}
-        <nav className="hidden lg:flex items-center gap-1">
-          {navLinks.map((link) => {
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="px-4 py-2 flex items-center gap-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-200 text-sm font-medium"
-                aria-label={link.label}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="hidden xl:inline">{link.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-        
-        {/* Mobile Hamburger & Account Menu */}
-        <div className="flex items-center gap-3 ml-auto">
-          {/* Account Dropdown */}
-          {session?.user && (
-            <div className="relative">
-              <button
-                onClick={() => setAccountOpen(!accountOpen)}
-                className="relative w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition-all duration-200 flex items-center justify-center text-white font-semibold group"
-                aria-label="Account menu"
-                title={session.user.name || session.user.email || 'Account'}
-              >
-                <User className="w-5 h-5" />
-              </button>
+    <>
+      {/* Mobile Hamburger Toggle Button (Positioned cleanly on the top-left of the header area on mobile) */}
+      <button 
+        onClick={() => setIsMobileOpen(true)}
+        className="md:hidden absolute top-3.5 left-6 z-40 p-2 rounded-xl border border-slate-200 bg-white shadow-sm hover:bg-slate-50 text-slate-600 transition-colors"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
 
-              {/* Dropdown Menu */}
-              {accountOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-4 animate-in fade-in slide-in-from-top-2"
-                  onMouseLeave={() => setAccountOpen(false)}
-                >
-                  {/* User Info */}
-                  <div className="mb-4 pb-4 border-b border-slate-700">
-                    <p className="text-sm font-semibold text-slate-100">{session.user.name}</p>
-                    <p className="text-xs text-slate-400">{session.user.email}</p>
-                    {(session.user as any)?.isAdmin && (
-                      <p className="text-xs text-amber-400 font-semibold mt-1">👑 Administrator</p>
-                    )}
-                  </div>
-
-                  {/* Admin Link */}
-                  {(session.user as any)?.isAdmin && (
-                    <Link
-                      href="/admin"
-                      className="block px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors mb-2"
-                    >
-                      Admin Dashboard
-                    </Link>
-                  )}
-
-                  {/* Account Page Link */}
-                  <Link
-                    href="/account"
-                    className="block px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors mb-2"
-                  >
-                    My Profile
-                  </Link>
-
-                  {/* Logout Button */}
-                  <button
-                    onClick={() => {
-                      setAccountOpen(false);
-                      signOut({ callbackUrl: '/auth/signin' });
-                    }}
-                    className="w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2 justify-center font-medium"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Sign In Link (when not authenticated) */}
-          {!session?.user && (
-            <Link
-              href="/auth/signin"
-              className="px-6 py-2.5 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-sm transition-all duration-200 hidden sm:block"
-            >
-              Sign In
-            </Link>
-          )}
-
-          {/* Mobile Menu Toggle */}
-          <button
-            className="lg:hidden p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            aria-label="Toggle navigation menu"
-            onClick={() => setMenuOpen((v) => !v)}
+      {/* Desktop Sidebar (Permanent solid Stripe-style nav panel) */}
+      <aside className="hidden md:flex flex-col bg-white border-r border-slate-200/80 shrink-0 h-full w-64">
+        {/* Header with blue sure+ Logo */}
+        <div className="flex items-center justify-between px-6 pt-7 pb-5">
+          <Link
+            href="/fintech/dashboard"
+            className="no-underline flex items-center hover:opacity-85 transition-opacity shrink-0"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {menuOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
-          </button>
+            <span className="text-[22px] font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">Velox</span>
+            <span className="text-[22px] font-medium text-slate-400 tracking-tight ml-1">Fintech</span>
+          </Link>
         </div>
-        
-        {/* Mobile Menu */}
-        {menuOpen && (
-          <div className="fixed inset-0 top-[76px] z-40 lg:hidden animate-in fade-in duration-200">
-            {/* Backdrop */}
-            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
-            
-            {/* Menu Card */}
-            <nav
-              className="absolute top-4 right-4 left-4 bg-slate-900 border border-slate-700 shadow-2xl rounded-xl p-3 space-y-1 animate-in slide-in-from-top-4 duration-300 z-50"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {navLinks.map((link) => {
-                const Icon = link.icon;
-                return (
+
+        {/* Nav Links List */}
+        <nav className="flex-1 overflow-y-auto py-6 px-4">
+          <ul className="space-y-4">
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive = pathname === link.href;
+
+              return (
+                <li key={link.label}>
                   <Link
-                    key={link.href}
                     href={link.href}
-                    className="flex items-center gap-4 px-4 py-4 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-200 font-bold"
-                    onClick={() => setMenuOpen(false)}
-                    aria-label={link.label}
+                    className={`flex items-center gap-3.5 px-4 py-3 rounded-lg text-[14px] font-medium transition-all duration-150 ${
+                      isActive
+                        ? 'bg-blue-50/80 text-blue-600'
+                        : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50'
+                    }`}
                   >
-                    <div className="p-2 bg-slate-950 border border-slate-800 rounded-md">
-                      <Icon className="w-5 h-5 text-blue-500" />
-                    </div>
-                    {link.label}
+                    <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                    <span className="flex-1">{link.label}</span>
                   </Link>
-                );
-              })}
-              
-              {/* Mobile Logout Button (if logged in) */}
-              {session?.user && (
-                <div className="pt-4 mt-2 border-t border-slate-800">
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      signOut({ callbackUrl: '/auth/signin' });
-                    }}
-                    className="w-full flex items-center gap-4 px-4 py-4 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-all duration-200 font-bold"
-                  >
-                    <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-md">
-                      <LogOut className="w-5 h-5" />
-                    </div>
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </nav>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {/* Footer Area - Log Out at bottom */}
+        <div className="py-6 bg-white mt-auto border-t border-slate-100 px-4">
+          <div className="space-y-1">
+            <button
+              onClick={() => signOut()}
+              className="w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-[14px] font-medium text-blue-600 hover:bg-blue-50/50 transition-all duration-150"
+            >
+              <LogOut className="w-[18px] h-[18px] shrink-0 text-blue-600" />
+              <span className="flex-1 text-left">Log Out</span>
+            </button>
           </div>
-        )}
-      </div>
-    </header>
+        </div>
+      </aside>
+
+      {/* Mobile Drawer Overlay */}
+      {isMobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Glass backdrop overlay with tap-to-close handler */}
+          <div 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setIsMobileOpen(false)}
+          />
+
+          {/* Drawer Sidebar Menu sliding in from left */}
+          <aside className="relative flex flex-col bg-white w-64 h-full shadow-2xl z-10 transition-transform duration-300 ease-out border-r border-slate-200">
+            {/* Header Area */}
+            <div className="flex items-center justify-between px-6 pt-7 pb-5">
+              <Link
+                href="/fintech/dashboard"
+                onClick={() => setIsMobileOpen(false)}
+                className="no-underline flex items-center hover:opacity-85 transition-opacity shrink-0"
+              >
+                <span className="text-[22px] font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">Velox</span>
+                <span className="text-[22px] font-medium text-slate-400 tracking-tight ml-1">Fintech</span>
+              </Link>
+
+              {/* Close Button */}
+              <button 
+                onClick={() => setIsMobileOpen(false)}
+                className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Nav Links */}
+            <nav className="flex-1 overflow-y-auto py-6 px-4">
+              <ul className="space-y-4">
+                {navLinks.map((link) => {
+                  const Icon = link.icon;
+                  const isActive = pathname === link.href;
+
+                  return (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        onClick={() => setIsMobileOpen(false)}
+                        className={`flex items-center gap-3.5 px-4 py-3 rounded-lg text-[14px] font-medium transition-all duration-150 ${
+                          isActive
+                            ? 'bg-blue-50/80 text-blue-600'
+                            : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                        <span className="flex-1">{link.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+
+            {/* Footer Area - Log Out at bottom */}
+            <div className="py-6 bg-white mt-auto border-t border-slate-100 px-4">
+              <div className="space-y-1">
+                <button
+                  onClick={() => signOut()}
+                  className="w-full flex items-center gap-3.5 px-4 py-3 rounded-lg text-[14px] font-medium text-blue-600 hover:bg-blue-50/50 transition-all duration-150"
+                >
+                  <LogOut className="w-[18px] h-[18px] shrink-0 text-blue-600" />
+                  <span className="flex-1 text-left">Log Out</span>
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
   );
 };
-
 
 export default Navbar;

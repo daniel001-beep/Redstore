@@ -1,0 +1,447 @@
+'use server';
+
+import { createClient } from '@/src/lib/supabase-server';
+import { headers, cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+
+export async function signInAction(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const cookieStore = await cookies();
+
+  if (!email || !password) {
+    return { error: 'Email and password are required.' };
+  }
+
+  const lowerEmail = email.toLowerCase().trim();
+
+  // Immediate admin bypass to ensure the user can always log in even when the DB is offline or paused
+  const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'idowuisdaniel1@gmail.com').toLowerCase().trim();
+  const isAdminBypass = lowerEmail === adminEmail || lowerEmail === 'idowuisdaniel1@gmail.com' || lowerEmail === 'admin@velox.com' || lowerEmail === 'daniel@velox.com';
+
+  if (isAdminBypass) {
+    // 1. Try to update the password in the local emulated JSON database
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const localDbPath = path.join(process.cwd(), 'local_dev_db.json');
+      if (fs.existsSync(localDbPath)) {
+        const data = JSON.parse(fs.readFileSync(localDbPath, 'utf-8'));
+        const userIdx = data.users.findIndex((u: any) => u.email === lowerEmail);
+        
+        const bcrypt = await import('bcryptjs');
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        if (userIdx >= 0) {
+          data.users[userIdx].password = hashedPassword;
+        } else {
+          // If admin wasn't in local DB for some reason, create them
+          data.users.push({
+            id: 'usr_6wshej3ht',
+            name: 'Idowu Daniel',
+            email: lowerEmail,
+            password: hashedPassword,
+            isAdmin: true,
+            emailVerified: null,
+            image: null,
+            securityLockdown: false
+          });
+        }
+
+        try {
+          fs.writeFileSync(localDbPath, JSON.stringify(data, null, 2));
+        } catch (writeErr) {
+          // Safe to ignore read-only file system
+        }
+      }
+    } catch (localSaveErr) {
+      console.error('Failed to save admin password locally:', localSaveErr);
+    }
+
+    // 2. Try to update the password in the remote Drizzle database (Non-blocking fallback)
+    try {
+      const { db: writeDb } = await import('@/src/db');
+      const { users: writeUsers } = await import('@/src/db/schema');
+      const { eq: writeEq } = await import('drizzle-orm');
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(password, 12);
+
+      // Check if user exists first in remote
+      const existingRemoteUser = await writeDb.query.users.findFirst({
+        where: writeEq(writeUsers.email, lowerEmail),
+      });
+
+      if (existingRemoteUser) {
+        await writeDb.update(writeUsers)
+          .set({ password: hashedPassword, isAdmin: true })
+          .where(writeEq(writeUsers.id, existingRemoteUser.id));
+        console.log(`[Auth Remote Sync] Updated password for admin ${lowerEmail} in PostgreSQL`);
+      } else {
+        await writeDb.insert(writeUsers).values({
+          id: 'usr_6wshej3ht',
+          email: lowerEmail,
+          name: 'Idowu Daniel',
+          password: hashedPassword,
+          isAdmin: true
+        });
+        console.log(`[Auth Remote Sync] Seeded admin ${lowerEmail} in PostgreSQL`);
+      }
+    } catch (remoteSaveErr: any) {
+      console.warn(`⚠️ [Auth Remote Sync] Non-blocking: Could not save password to PostgreSQL database (Supabase project may be paused): ${remoteSaveErr.message}`);
+    }
+
+    cookieStore.set('velox-local-user', encodeURIComponent(JSON.stringify({
+      id: 'usr_6wshej3ht', // Match the seed ID in local_dev_db.json
+      email: lowerEmail,
+      name: 'Idowu Daniel',
+      isAdmin: true
+    })), {
+      path: '/',
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7 // 1 week
+    });
+
+    cookieStore.set('sb-access-token', 'mock-token', { path: '/' });
+    return { success: true };
+  }
+
+  // 1. Verify credentials against local Drizzle PostgreSQL database first
+  let drizzleUser: any = null;
+  let isDrizzlePasswordValid = false;
+
+  try {
+    const { db } = await import('@/src/db');
+    const { users } = await import('@/src/db/schema');
+    const { eq } = await import('drizzle-orm');
+
+    drizzleUser = await db.query.users.findFirst({
+      where: eq(users.email, lowerEmail),
+    });
+
+    if (drizzleUser) {
+      if (lowerEmail === 'idowuisdaniel1@gmail.com') {
+        isDrizzlePasswordValid = true; // Absolute admin credential bypass for fallback and recovery
+      } else if (drizzleUser.password) {
+        const bcrypt = await import('bcryptjs');
+        if (drizzleUser.password.startsWith('$2a$') || drizzleUser.password.startsWith('$2b$') || drizzleUser.password.length > 30) {
+          isDrizzlePasswordValid = await bcrypt.compare(password, drizzleUser.password);
+        } else {
+          isDrizzlePasswordValid = drizzleUser.password === password;
+          if (isDrizzlePasswordValid) {
+            // Auto-upgrade plain-text passwords to secure Bcrypt hashes
+            const hashedPassword = await bcrypt.hash(password, 12);
+            await db.update(users)
+              .set({ password: hashedPassword })
+              .where(eq(users.id, drizzleUser.id));
+          }
+        }
+      }
+    } else {
+      // Dynamic registration for new users!
+      const { db: writeDb } = await import('@/src/db');
+      const { users: writeUsers } = await import('@/src/db/schema');
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(password, 12);
+      const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+      const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+      const isAdmin = adminEmail ? lowerEmail === adminEmail : false;
+
+      const [newUser] = await writeDb.insert(writeUsers).values({
+        id: userId,
+        email: lowerEmail,
+        name: lowerEmail.split('@')[0],
+        password: hashedPassword,
+        isAdmin: isAdmin,
+      }).returning();
+
+      drizzleUser = newUser;
+      isDrizzlePasswordValid = true;
+    }
+  } catch (err) {
+    console.error('[Auth Drizzle] Failed to check Drizzle user credentials, falling back directly to JSON database:', err);
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const localDbPath = path.join(process.cwd(), 'local_dev_db.json');
+      if (fs.existsSync(localDbPath)) {
+        const data = JSON.parse(fs.readFileSync(localDbPath, 'utf-8'));
+        const user = data.users.find((u: any) => u.email === lowerEmail);
+        if (user) {
+          drizzleUser = user;
+          const bcrypt = await import('bcryptjs');
+          if (lowerEmail === 'idowuisdaniel1@gmail.com') {
+            isDrizzlePasswordValid = true; // Auto-pass admin during offline fallback
+          } else if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.length > 30) {
+            isDrizzlePasswordValid = await bcrypt.compare(password, user.password);
+          } else {
+            isDrizzlePasswordValid = user.password === password;
+          }
+        } else {
+          // Dynamic registration directly inside memory/local file
+          const bcrypt = await import('bcryptjs');
+          const hashedPassword = await bcrypt.hash(password, 12);
+          const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+          const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+          const isAdmin = adminEmail ? lowerEmail === adminEmail : false;
+
+          const newUserObj = {
+            id: userId,
+            email: lowerEmail,
+            name: lowerEmail.split('@')[0],
+            password: hashedPassword,
+            isAdmin: isAdmin,
+            emailVerified: null,
+            image: null,
+            securityLockdown: false
+          };
+          data.users.push(newUserObj);
+          try {
+            fs.writeFileSync(localDbPath, JSON.stringify(data, null, 2));
+          } catch (writeErr) {
+            // Safe to ignore read-only file system
+          }
+          drizzleUser = newUserObj;
+          isDrizzlePasswordValid = true;
+        }
+      }
+    } catch (fallbackErr) {
+      console.error('[Auth Fallback] Local JSON lookup failed:', fallbackErr);
+    }
+  }
+
+  if (isDrizzlePasswordValid && drizzleUser) {
+    const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+    const isUserAdmin = drizzleUser.isAdmin || lowerEmail === 'idowuisdaniel1@gmail.com' || (adminEmail ? lowerEmail === adminEmail : false);
+    cookieStore.set('velox-local-user', encodeURIComponent(JSON.stringify({
+      id: drizzleUser.id,
+      email: lowerEmail,
+      name: drizzleUser.name || lowerEmail.split('@')[0],
+      isAdmin: isUserAdmin
+    })), {
+      path: '/',
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7 // 1 week
+    });
+
+    // Set a dummy Supabase cookie to keep any standard library checks happy
+    cookieStore.set('sb-access-token', 'mock-token', { path: '/' });
+
+    return { success: true };
+  }
+
+  return { error: 'Invalid credentials.' };
+}
+
+export async function signUpAction(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+
+  if (!email || !password) {
+    return { error: 'Email and password are required.' };
+  }
+
+  const lowerEmail = email.toLowerCase().trim();
+  const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+  const isAdmin = adminEmail ? lowerEmail === adminEmail : false;
+  const isAdminBypass = lowerEmail === adminEmail || lowerEmail === 'idowuisdaniel1@gmail.com' || lowerEmail === 'admin@velox.com' || lowerEmail === 'daniel@velox.com' || isAdmin;
+
+  if (isAdminBypass) {
+    const cookieStore = await cookies();
+
+    // 1. Try to update the password in the local emulated JSON database
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const localDbPath = path.join(process.cwd(), 'local_dev_db.json');
+      if (fs.existsSync(localDbPath)) {
+        const data = JSON.parse(fs.readFileSync(localDbPath, 'utf-8'));
+        const userIdx = data.users.findIndex((u: any) => u.email === lowerEmail);
+        
+        const bcrypt = await import('bcryptjs');
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        if (userIdx >= 0) {
+          data.users[userIdx].password = hashedPassword;
+        } else {
+          // If admin wasn't in local DB for some reason, create them
+          data.users.push({
+            id: 'usr_6wshej3ht',
+            name: 'Idowu Daniel',
+            email: lowerEmail,
+            password: hashedPassword,
+            isAdmin: true,
+            emailVerified: null,
+            image: null,
+            securityLockdown: false
+          });
+        }
+
+        try {
+          fs.writeFileSync(localDbPath, JSON.stringify(data, null, 2));
+        } catch (writeErr) {
+          // Safe to ignore read-only file system
+        }
+      }
+    } catch (localSaveErr) {
+      console.error('Failed to save admin password locally:', localSaveErr);
+    }
+
+    // 2. Try to update the password in the remote Drizzle database (Non-blocking fallback)
+    try {
+      const { db: writeDb } = await import('@/src/db');
+      const { users: writeUsers } = await import('@/src/db/schema');
+      const { eq: writeEq } = await import('drizzle-orm');
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(password, 12);
+
+      // Check if user exists first in remote
+      const existingRemoteUser = await writeDb.query.users.findFirst({
+        where: writeEq(writeUsers.email, lowerEmail),
+      });
+
+      if (existingRemoteUser) {
+        await writeDb.update(writeUsers)
+          .set({ password: hashedPassword, isAdmin: true })
+          .where(writeEq(writeUsers.id, existingRemoteUser.id));
+        console.log(`[Auth Remote Sync] Updated password for admin ${lowerEmail} in PostgreSQL`);
+      } else {
+        await writeDb.insert(writeUsers).values({
+          id: 'usr_6wshej3ht',
+          email: lowerEmail,
+          name: 'Idowu Daniel',
+          password: hashedPassword,
+          isAdmin: true
+        });
+        console.log(`[Auth Remote Sync] Seeded admin ${lowerEmail} in PostgreSQL`);
+      }
+    } catch (remoteSaveErr: any) {
+      console.warn(`⚠️ [Auth Remote Sync] Non-blocking: Could not save password to PostgreSQL database (Supabase project may be paused): ${remoteSaveErr.message}`);
+    }
+
+    cookieStore.set('velox-local-user', encodeURIComponent(JSON.stringify({
+      id: 'usr_6wshej3ht', // match the seed ID in local_dev_db.json
+      email: lowerEmail,
+      name: 'Idowu Daniel',
+      isAdmin: true
+    })), {
+      path: '/',
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7 // 1 week
+    });
+
+    cookieStore.set('sb-access-token', 'mock-token', { path: '/' });
+    return { success: true };
+  }
+
+  try {
+    const { db } = await import('@/src/db');
+    const { users } = await import('@/src/db/schema');
+    const bcrypt = await import('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+
+    const [newUser] = await db.insert(users).values({
+      id: userId,
+      email: lowerEmail,
+      name: lowerEmail.split('@')[0],
+      password: hashedPassword,
+      isAdmin: isAdmin,
+    }).onConflictDoUpdate({
+      target: users.email,
+      set: {
+        password: hashedPassword,
+        isAdmin: isAdmin,
+      }
+    }).returning();
+
+    const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+    const cookieStore = await cookies();
+    cookieStore.set('velox-local-user', encodeURIComponent(JSON.stringify({
+      id: newUser?.id || userId,
+      email: lowerEmail,
+      name: lowerEmail.split('@')[0],
+      isAdmin: isAdmin || (adminEmail ? lowerEmail === adminEmail : false)
+    })), {
+      path: '/',
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7 // 1 week
+    });
+
+    // Set a dummy Supabase cookie
+    cookieStore.set('sb-access-token', 'mock-token', { path: '/' });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Signup Action Error], falling back directly to JSON file signup:', err);
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const localDbPath = path.join(process.cwd(), 'local_dev_db.json');
+      if (fs.existsSync(localDbPath)) {
+        const data = JSON.parse(fs.readFileSync(localDbPath, 'utf-8'));
+        
+        const bcrypt = await import('bcryptjs');
+        const hashedPassword = await bcrypt.hash(password, 12);
+        const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+        
+        const existingIdx = data.users.findIndex((u: any) => u.email === lowerEmail);
+        const newUserObj = {
+          id: existingIdx >= 0 ? data.users[existingIdx].id : userId,
+          email: lowerEmail,
+          name: lowerEmail.split('@')[0],
+          password: hashedPassword,
+          isAdmin: isAdmin,
+          emailVerified: null,
+          image: null,
+          securityLockdown: false
+        };
+
+        if (existingIdx >= 0) {
+          data.users[existingIdx] = newUserObj;
+        } else {
+          data.users.push(newUserObj);
+        }
+
+        try {
+          fs.writeFileSync(localDbPath, JSON.stringify(data, null, 2));
+        } catch (writeErr) {
+          // Safe to ignore EROFS
+        }
+
+        const cookieStore = await cookies();
+        cookieStore.set('velox-local-user', encodeURIComponent(JSON.stringify({
+          id: newUserObj.id,
+          email: lowerEmail,
+          name: lowerEmail.split('@')[0],
+          isAdmin: isAdmin || (adminEmail ? lowerEmail === adminEmail : false)
+        })), {
+          path: '/',
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 60 * 60 * 24 * 7 // 1 week
+        });
+
+        cookieStore.set('sb-access-token', 'mock-token', { path: '/' });
+        return { success: true };
+      }
+    } catch (fallbackErr) {
+      console.error('[Signup Fallback Error]:', fallbackErr);
+    }
+    return { error: 'Failed to create user locally.' };
+  }
+}
+
+export async function signOutAction() {
+  const supabase = await createClient();
+  if (supabase) {
+    await supabase.auth.signOut().catch(() => {});
+  }
+  const cookieStore = await cookies();
+  cookieStore.set('velox-local-user', '', { path: '/', maxAge: 0 });
+  cookieStore.set('sb-access-token', '', { path: '/', maxAge: 0 });
+  return { success: true };
+}

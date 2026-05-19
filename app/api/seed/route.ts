@@ -2,6 +2,8 @@ import { db } from "@/src/db";
 import { products, reviews } from "@/src/db/schema";
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { getResilientSession } from "@/src/lib/auth-session";
+
 
 // Image IDs mapped to their actual content so names match images
 const PRODUCT_TEMPLATES = [
@@ -103,6 +105,11 @@ const DESCRIPTIONS: Record<string, string[]> = {
 };
 
 export async function GET() {
+  const session = await getResilientSession();
+  if (!session?.user?.isAdmin) {
+    return NextResponse.json({ error: "Unauthorized access blocked by Zero-Trust API gateway" }, { status: 403 });
+  }
+
   try {
     console.log("Starting Seeding Process...");
 

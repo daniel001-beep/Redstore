@@ -1,6 +1,5 @@
 import React from 'react';
 import Navbar from './Navbar';
-import Footer from './Footer';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -8,7 +7,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
-    <section className="container mx-auto px-4 md:px-8 lg:px-12 pt-32 md:pt-16 pb-24 max-w-7xl">
+    <section className="container mx-auto px-2 xs:px-3 sm:px-6 md:px-8 lg:px-12 pt-4 sm:pt-6 md:pt-8 pb-20 sm:pb-24 max-w-7xl">
       <div className="flex flex-col gap-10">
         {children}
       </div>

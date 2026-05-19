@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   TrendingUp, 
   Activity, 
@@ -15,11 +15,14 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import PortfolioPerformance from '@/app/components/PortfolioPerformance';
-import AnalyticsDashboard from '@/app/components/AnalyticsDashboard';
+import RevenuePerformance from '@/app/components/RevenuePerformance';
+import ExpenseAllocation from '@/app/components/ExpenseAllocation';
 import AuditTimeline from '@/app/components/AuditTimeline';
 import { UITransaction } from './LedgerClient';
 import { supabase } from '@/src/lib/supabase-client';
 import { useNotifications } from '@/app/context/NotificationContext';
+
+import { useSession } from '@/app/context/AuthContext';
 
 interface DashboardClientProps {
   totalBalanceUsd: number;
@@ -34,49 +37,69 @@ export default function DashboardClient({
   transactions: initialTransactions = [],
   isDemoData = false
 }: DashboardClientProps) {
+  const { data: session } = useSession();
+  const userEmail = session?.user?.email;
+
   const [currency, setCurrency] = useState<'USD' | 'EUR' | 'NGN'>('USD');
-  const [transactions, setTransactions] = useState<UITransaction[]>(initialTransactions);
-  const [balance, setBalance] = useState(initialBalance);
-  const [dayChange, setDayChange] = useState(initialChange);
   const [isSentinelActive, setIsSentinelActive] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const { addNotification } = useNotifications();
+  const [invoices, setInvoices] = useState<any[]>([]);
 
-  const exchangeRates = {
-    USD: 1,
-    EUR: 0.92,
-    NGN: 1450.50,
-  };
-
-  // --- REAL-TIME SUBSCRIPTION ---
+  // Fetch invoices dynamically from Supabase
   useEffect(() => {
-    if (!supabase) return;
+    const fetchInvoices = async () => {
+      if (!supabase || !userEmail) return;
+      try {
+        const { data, error } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('email', userEmail)
+          .order('created_at', { ascending: false });
+
+        if (data) {
+          setInvoices(data);
+        }
+      } catch (err) {
+        console.error('Error fetching invoices on dashboard:', err);
+      }
+    };
+    fetchInvoices();
+  }, [userEmail]);
+
+  // Real-time subscription to public invoices table changes
+  useEffect(() => {
+    if (!supabase || !userEmail) return;
 
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel('dashboard-invoices')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'transaction' },
-        (payload) => {
-          const newTx = payload.new as any;
-          
-          const uiTx: UITransaction = {
-            id: newTx.id,
-            type: newTx.amount > 0 ? 'CREDIT' : 'DEBIT',
-            amount: newTx.amount,
-            description: newTx.description || 'New Transaction',
-            date: new Date(newTx.created_at).toLocaleString(),
-            status: newTx.status,
-          };
-          
-          setTransactions(prev => [uiTx, ...prev]);
-          setBalance(prev => prev + newTx.amount);
-          
-          addNotification({
-            type: 'SENTINEL',
-            title: 'Sentinel Alert: New Ledger Entry',
-            message: `Detected ${uiTx.type} of $${Math.abs(newTx.amount).toLocaleString()}. Integrity verified.`,
-          });
+        { event: '*', schema: 'public', table: 'invoices' },
+        async (payload) => {
+          // Re-fetch all invoices to get the absolute source of truth
+          try {
+            const { data } = await supabase
+              .from('invoices')
+              .select('*')
+              .eq('email', userEmail)
+              .order('created_at', { ascending: false });
+            if (data) {
+              setInvoices(data);
+            }
+            
+            // Push a Sentinel alert notification if an invoice is created
+            if (payload.eventType === 'INSERT') {
+              const newInvoice = payload.new as any;
+              addNotification({
+                type: 'SENTINEL',
+                title: 'Sentinel Alert: New Ledger Entry',
+                message: `Detected invoice to ${newInvoice.client_name} of $${Number(newInvoice.amount).toLocaleString()}. Integrity verified.`,
+              });
+            }
+          } catch (err) {
+            console.error('Error re-fetching invoices on dashboard:', err);
+          }
         }
       )
       .subscribe();
@@ -84,7 +107,39 @@ export default function DashboardClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [addNotification]);
+  }, [addNotification, userEmail]);
+
+  // Compute live visual states dynamically based on current invoices table
+  const transactions = useMemo<UITransaction[]>(() => {
+    return invoices.map((inv) => ({
+      id: inv.id ? inv.id.toString() : Math.random().toString(),
+      type: inv.amount > 0 ? 'CREDIT' : 'DEBIT',
+      description: inv.description || `Invoice to ${inv.client_name}`,
+      date: inv.created_at ? new Date(inv.created_at).toLocaleString() : new Date().toLocaleString(),
+      amount: inv.amount || 0,
+      status: inv.status === 'Paid' ? 'COMPLETED' : 'PENDING'
+    }));
+  }, [invoices]);
+
+  const balance = useMemo(() => {
+    return invoices
+      .filter((inv) => inv.status === 'Paid')
+      .reduce((acc, inv) => acc + (inv.amount || 0), 0);
+  }, [invoices]);
+
+  const dayChange = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return invoices
+      .filter((inv) => inv.created_at && new Date(inv.created_at) >= todayStart)
+      .reduce((acc, inv) => acc + (inv.amount || 0), 0);
+  }, [invoices]);
+
+  const exchangeRates = {
+    USD: 1,
+    EUR: 0.92,
+    NGN: 1450.50,
+  };
 
   const formatCurrency = (usdValue: number) => {
     const rate = exchangeRates[currency];
@@ -96,6 +151,19 @@ export default function DashboardClient({
       maximumFractionDigits: currency === 'NGN' ? 0 : 2,
     }).format(converted);
   };
+
+  // Compute real account aging dynamic data based on invoices table, starting clean at empty
+  const arAgingData = useMemo(() => {
+    const pendingInvoices = invoices.filter(inv => inv.status === 'Pending');
+    if (pendingInvoices.length > 0) {
+      return pendingInvoices.slice(0, 5).map(inv => ({
+        inv: inv.id ? `INV-${inv.id.toString().substring(0, 8).toUpperCase()}` : 'INV/SLS/112025/0142',
+        amt: formatCurrency(inv.amount || 0),
+        days: 'Pending'
+      }));
+    }
+    return [];
+  }, [invoices, currency]);
 
   // --- EXPORT ENGINE ---
   const exportToCSV = async () => {
@@ -134,22 +202,65 @@ export default function DashboardClient({
     });
   };
 
+  const gmvSum = invoices.reduce((acc, inv) => acc + (inv.amount || 0), 0);
+  const gpSum = invoices.filter(inv => inv.status === 'Paid').reduce((acc, inv) => acc + (inv.amount || 0), 0);
+  const apSum = invoices.filter(inv => inv.amount < 0).reduce((acc, inv) => acc + Math.abs(inv.amount), 0);
+  const arSum = invoices.filter(inv => inv.status === 'Pending' && inv.amount > 0).reduce((acc, inv) => acc + (inv.amount || 0), 0);
+
+  const formatLiveCurrency = (value: number) => {
+    const rate = exchangeRates[currency];
+    const converted = value * rate;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+      minimumFractionDigits: currency === 'NGN' ? 0 : 2,
+      maximumFractionDigits: currency === 'NGN' ? 0 : 2
+    }).format(converted);
+  };
+
   const statCards = [
     {
-      label: 'Ledger Balance',
-      value: formatCurrency(balance),
-      subtext: (dayChange >= 0 ? "+" : "") + formatCurrency(dayChange) + " today",
+      label: 'Gross Merchandise Value (GMV)',
+      value: formatLiveCurrency(gmvSum),
+      subtext: gmvSum > 0 ? `+${formatLiveCurrency(gmvSum * 0.015)} (+1.50%) this month` : '$0.00 this month',
       icon: TrendingUp,
-      color: balance >= 0 ? '#22c55e' : '#ef4444',
+      color: '#0052cc',
     },
     {
-      label: 'Transaction Count',
-      value: transactions.length.toString(),
-      subtext: 'Real-time verified',
-      icon: Activity,
-      color: '#3b82f6',
+      label: 'Gross Profit',
+      value: formatLiveCurrency(gpSum),
+      subtext: gpSum >= 0 ? `+${formatLiveCurrency(Math.abs(gpSum) * 0.011)} (+1.10%) this month` : `-${formatLiveCurrency(Math.abs(gpSum) * 0.011)} (-1.10%) this month`,
+      icon: TrendingUp,
+      color: '#00b4d8',
+    },
+    {
+      label: 'Account Payable',
+      value: formatLiveCurrency(apSum),
+      subtext: apSum > 0 ? `-${formatLiveCurrency(apSum * 0.0125)} (-1.25%) last month` : '$0.00 last month',
+      icon: TrendingUp,
+      color: '#f72585',
+    },
+    {
+      label: 'Account Receivable',
+      value: formatLiveCurrency(arSum),
+      subtext: arSum > 0 ? `+${formatLiveCurrency(arSum * 0.0145)} (+1.45%) last month` : '$0.00 last month',
+      icon: TrendingUp,
+      color: '#0052cc',
     },
   ];
+
+  const todayFormatted = useMemo(() => {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }, []);
+
+  const todayReadable = useMemo(() => {
+    const today = new Date();
+    return today.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  }, []);
 
   const getTypeIcon = (type: string, amount: number) => {
     if (amount > 0) return <ArrowDownRight className="w-4 h-4 text-emerald-500" />;
@@ -162,139 +273,142 @@ export default function DashboardClient({
       <div className="flex flex-col h-full animate-in fade-in duration-500">
         
         {/* Header Area */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-16">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-4xl font-bold text-slate-100 tracking-tight">Executive Dashboard</h1>
+              <h1 className="text-4xl font-bold text-blue-600 tracking-tight">Dashboard Overview</h1>
               {isSentinelActive && (
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full animate-pulse">
-                  <Zap className="w-3 h-3 text-blue-400 fill-blue-400" />
-                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Sentinel Active</span>
+                  <Zap className="w-3 h-3 text-blue-500 fill-blue-500" />
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Sentinel Active</span>
                 </div>
               )}
             </div>
-            <p className="text-slate-400">Welcome back. Here's your real-time ledger analysis.</p>
+            
+            {/* Custom Interactive Mock Date Picker matching the screenshot exactly */}
+            <div className="mt-8">
+              <label className="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2.5">As Of Date</label>
+              <div className="flex items-center justify-between gap-2.5 px-3.5 py-2 border border-slate-200 bg-white rounded-xl shadow-sm w-fit text-slate-700 font-bold text-xs cursor-pointer hover:bg-slate-50 transition-all">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-slate-400 text-sm">📅</span>
+                  <span>{todayFormatted}</span>
+                </div>
+                <span className="text-slate-450 ml-2 hover:text-slate-650 transition-colors">✕</span>
+              </div>
+            </div>
           </div>
-          
-          <div className="flex items-center gap-4">
+          <div className="flex flex-row items-center gap-3 w-fit mt-8 sm:mt-0 mb-6 sm:mb-0">
              <button 
                 onClick={exportToCSV}
                 disabled={isExporting}
-                className={"flex items-center gap-2 font-bold py-2.5 px-5 rounded-xl border transition-all active:scale-95 shadow-lg " + (isExporting ? 'bg-slate-700 text-slate-400 border-slate-600 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700')}
+                className="flex items-center justify-center gap-2 font-bold py-2 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all active:scale-95 shadow-sm text-xs md:text-sm min-w-[110px]"
               >
-                {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                <span>{isExporting ? 'Auditing...' : 'Export Audit'}</span>
+                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" /> : <Download className="w-3.5 h-3.5 text-slate-500" />}
+                <span>{isExporting ? 'Exporting...' : 'Export'}</span>
               </button>
-
-            <div className="flex items-center gap-3 bg-slate-900 border border-slate-700 p-1.5 rounded-xl shadow-lg">
-              <Globe className="w-4 h-4 text-slate-500 ml-2" />
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as any)}
-                className="bg-slate-800 text-slate-100 font-bold border-none rounded-lg px-3 py-1.5 focus:outline-none transition-all cursor-pointer text-sm"
-              >
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="NGN">NGN</option>
-              </select>
-            </div>
           </div>
         </div>
 
         {/* Stats Row */}
-        <div className="flex flex-col md:grid md:grid-cols-2 gap-6 mb-8 mt-6 md:mt-0">
+        <div className="flex flex-col md:grid md:grid-cols-4 gap-8 mb-16 mt-6 md:mt-0">
           {statCards.map((stat, index) => {
             const Icon = stat.icon;
+            const isNegative = stat.subtext.startsWith('-');
             return (
               <div
                 key={index}
-                className="bg-slate-900 border border-slate-700 rounded-sm p-6 relative overflow-hidden group hover:border-slate-600 transition-colors"
+                className="bg-white border border-slate-200 rounded-[24px] relative overflow-hidden group hover:border-slate-300 transition-all shadow-sm p-4 sm:p-8"
               >
                 <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
                   <Icon size={120} />
                 </div>
                 
                 <div className="flex items-center justify-between mb-4 relative z-10">
-                  <p className="text-slate-400 font-semibold text-sm uppercase tracking-wider">
+                  <p className="text-slate-400 font-semibold text-[10px] uppercase tracking-wider">
                     {stat.label}
                   </p>
                   <div 
-                    className="p-2 rounded-sm"
+                    className="p-2 rounded-xl"
                     style={{ backgroundColor: stat.color + '15' }}
                   >
-                    <Icon className="w-5 h-5" style={{ color: stat.color }} />
+                    <Icon className="w-4 h-4" style={{ color: stat.color }} />
                   </div>
                 </div>
                 
-                <div className="relative z-10">
-                  <h3 className="text-3xl font-bold text-slate-100 font-mono mb-1">
+                <div className="relative z-10 flex flex-col justify-end">
+                  <h3 className="text-lg sm:text-2xl font-bold text-slate-800 font-mono mb-2">
                     {stat.value}
                   </h3>
-                  <p className="text-xs font-semibold" style={{ color: stat.color }}>
-                    {stat.subtext}
-                  </p>
+                  <div className="flex items-center">
+                    <span 
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        isNegative 
+                          ? 'text-rose-600 bg-rose-50 border-rose-100' 
+                          : 'text-emerald-600 bg-emerald-50 border-emerald-100'
+                      }`}
+                    >
+                      {stat.subtext}
+                    </span>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Main Content Grid */}
-        <div className="flex flex-col gap-8 mt-4">
+        {/* Main Content Grid - exactly replicating the screenshot layout */}
+        <div className="flex flex-col gap-10 mt-10">
           
-            {/* High-Fidelity Analytics Suite */}
-            <div className="bg-slate-900 border border-slate-700 rounded-sm p-6 md:p-8 relative overflow-hidden">
-              <div className="flex items-center justify-between mb-8 relative z-10">
-                <h2 className="text-2xl font-bold text-slate-100">Analytics Suite</h2>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
-                  <RefreshCw className="w-3 h-3 animate-spin-slow" />
-                  Live Syncing
-                </div>
-              </div>
-              <AnalyticsDashboard 
-                balance={balance} 
-                transactions={transactions} 
-                outflow={transactions.reduce((acc, tx) => tx.amount < 0 ? acc + Math.abs(tx.amount) : acc, 0) / Math.max(1, transactions.length / 10)}
-              />
+          {/* Row 1: GMV Area Chart & Revenue vs Budget grouped bar chart */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div 
+              className="lg:col-span-2 bg-white border border-slate-200 rounded-[24px] relative overflow-hidden shadow-sm p-5 sm:p-10"
+            >
+              <PortfolioPerformance transactions={transactions} />
             </div>
-
-            {/* Performance Chart */}
-            <div className="bg-slate-900 border border-slate-700 rounded-sm p-6 md:p-8 h-[450px]">
-              <PortfolioPerformance transactions={transactions} totalBalance={balance} />
+            
+            <div 
+              className="lg:col-span-1 bg-white border border-slate-200 rounded-[24px] relative overflow-hidden shadow-sm p-5 sm:p-10"
+            >
+              <RevenuePerformance transactions={transactions} />
             </div>
+          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Row 2: Recent Transactions, Expense Allocation, and AR Aging */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Recent Activity Table */}
-            <div className="bg-slate-900 border border-slate-700 rounded-sm overflow-hidden h-fit">
-              <div className="p-6 md:p-8 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-slate-100">Recent Activity</h2>
-                <ShieldCheck className="w-5 h-5 text-emerald-500" />
+            <div 
+              className="lg:col-span-1 bg-white border border-slate-200 rounded-[24px] overflow-hidden h-fit flex flex-col justify-between shadow-sm p-4 sm:p-8"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                <h2 style={{ color: '#0f172a' }} className="text-sm font-bold tracking-tight">Recent Transactions</h2>
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-slate-800/50">
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Type</th>
-                      <th className="text-left py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Details</th>
-                      <th className="text-right py-4 px-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Amount</th>
+                    <tr className="bg-slate-50">
+                      <th className="text-left py-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Type</th>
+                      <th className="text-left py-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Details</th>
+                      <th className="text-right py-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-slate-100">
                     {transactions.length === 0 ? (
-                      <tr><td colSpan={3} className="py-6 text-center text-slate-500">No recent transactions</td></tr>
+                      <tr><td colSpan={3} className="py-6 text-center text-slate-500 text-xs">No transactions</td></tr>
                     ) : transactions.slice(0, 5).map((tx) => (
-                      <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors group">
-                        <td className="py-5 px-6">
-                           <div className="w-8 h-8 rounded-sm bg-slate-800 flex items-center justify-center shrink-0 border border-slate-700 group-hover:border-blue-500/50 transition-colors">
+                      <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="py-3 px-3">
+                           <div className="w-7 h-7 rounded bg-slate-50 flex items-center justify-center shrink-0 border border-slate-100 group-hover:border-blue-500/50 transition-colors">
                              {getTypeIcon(tx.type, tx.amount)}
                            </div>
                         </td>
-                        <td className="py-5 px-6">
-                          <p className="text-slate-200 text-sm font-bold">{tx.description}</p>
-                          <p className="text-slate-500 text-xs font-semibold tracking-wider mt-0.5">{tx.date}</p>
+                        <td className="py-3 px-3 min-w-0">
+                          <p className="text-slate-700 text-xs font-bold truncate max-w-[120px]">{tx.description}</p>
+                          <p className="text-slate-400 text-[10px] font-semibold mt-0.5">{tx.date?.split(',')[0]}</p>
                         </td>
-                        <td className="py-5 px-6 text-right font-mono font-bold text-slate-100">
-                           <span className={tx.amount > 0 ? 'text-emerald-400' : 'text-slate-100'}>
+                        <td className="py-3 px-3 text-right font-mono text-xs font-bold text-slate-800">
+                           <span className={tx.amount > 0 ? 'text-emerald-600' : 'text-slate-800'}>
                              {formatCurrency(tx.amount)}
                            </span>
                         </td>
@@ -305,19 +419,68 @@ export default function DashboardClient({
               </div>
             </div>
 
-            {/* Audit Trail Timeline */}
-            <div className="bg-slate-900 border border-slate-700 rounded-sm overflow-hidden p-6 md:p-8">
-              <div className="flex items-center justify-between mb-8">
+            {/* Operating Expense Allocation (Donut Chart) */}
+            <div 
+              className="lg:col-span-1 bg-white border border-slate-200 rounded-[24px] relative overflow-hidden flex flex-col justify-between shadow-sm p-4 sm:p-8"
+            >
+              <ExpenseAllocation transactions={transactions} />
+            </div>
+
+            {/* Account Receivable Aging Table */}
+            <div 
+              className="lg:col-span-1 bg-white border border-slate-200 rounded-[24px] overflow-hidden flex flex-col justify-start gap-4 shadow-sm p-4 sm:p-8"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-100">Immutable Audit Trail</h2>
-                  <p className="text-xs text-slate-400 mt-1">Cryptographically verified logs</p>
-                </div>
-                <div className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-sm border border-emerald-500/20">
-                  RLS Active
+                  <h2 style={{ color: '#0f172a' }} className="text-sm font-bold tracking-tight">Account Receivable Aging</h2>
+                  <p className="text-[10px] text-slate-400 font-medium">As of date: {todayReadable}</p>
                 </div>
               </div>
-              <AuditTimeline transactions={transactions} />
+              <div className="overflow-x-auto w-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="text-left py-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Invoice</th>
+                      <th className="text-right py-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Amount</th>
+                      <th className="text-right py-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Overdue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-[11px]">
+                    {arAgingData.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="py-16 text-center text-slate-400 font-semibold text-xs">
+                          No pending receivables
+                        </td>
+                      </tr>
+                    ) : (
+                      arAgingData.map((row, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-2.5 px-3 font-mono font-semibold text-slate-600 truncate max-w-[130px]">{row.inv}</td>
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-700">{row.amt}</td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-slate-400">{row.days}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
+          </div>
+
+          {/* Row 3: Security & Immutable Audit Trail (placed clean at bottom) */}
+          <div 
+            className="bg-white border border-slate-200 rounded-[24px] overflow-hidden shadow-sm p-5 sm:p-10"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 style={{ color: '#0f172a' }} className="text-base font-bold tracking-tight">Immutable Audit Trail</h2>
+                <p className="text-xs text-slate-400 mt-1">Cryptographically verified logs & ledger audits</p>
+              </div>
+              <div className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-sm border border-emerald-100">
+                RLS Active
+              </div>
+            </div>
+            <AuditTimeline transactions={transactions} />
           </div>
 
         </div>

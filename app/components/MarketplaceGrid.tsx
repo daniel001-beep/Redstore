@@ -126,33 +126,34 @@ export default function MarketplaceGrid({ onSelectProduct }: MarketplaceGridProp
           return (
             <div
               key={product.id}
-              className="bg-slate-900/60 backdrop-blur-md border border-slate-700/50 rounded-sm p-8 hover:bg-slate-800 transition-all duration-300 flex flex-col group relative overflow-hidden w-full lg:w-[calc(33.333%-1.5rem)]"
+              className="bg-white border border-slate-200 rounded-[24px] shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group relative overflow-hidden w-full lg:w-[calc(33.333%-1.5rem)]"
+              style={{ padding: '32px' }}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-50/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               
               <div className="flex items-start justify-between gap-4 mb-4 relative z-10">
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-slate-100 mb-1">
+                  <h3 className="text-base font-bold text-slate-800 mb-1">
                     {product.title}
                   </h3>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                     {product.category}
                   </p>
                 </div>
-                <div className="w-10 h-10 rounded-sm flex items-center justify-center shrink-0 bg-slate-800 border border-slate-700 group-hover:scale-110 transition-transform">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-slate-50 border border-slate-200 group-hover:scale-110 transition-transform">
                   <Icon className="w-5 h-5" style={{ color: product.accentColor }} />
                 </div>
               </div>
 
-              <p className="text-sm text-slate-400 leading-relaxed mb-6 relative z-10">
+              <p className="text-xs text-slate-500 font-medium leading-relaxed mb-6 relative z-10">
                 {product.description}
               </p>
 
               <div className="space-y-2 mb-6 relative z-10">
                 {product.features.map((feature, idx) => (
                   <div key={idx} className="flex items-start gap-2">
-                    <ShieldCheck className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-                    <span className="text-xs text-slate-300">
+                    <ShieldCheck className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                    <span className="text-xs text-slate-600 font-semibold">
                       {feature}
                     </span>
                   </div>
@@ -160,20 +161,20 @@ export default function MarketplaceGrid({ onSelectProduct }: MarketplaceGridProp
               </div>
 
               <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
-                <div className="bg-slate-950/50 rounded-sm p-3 border border-slate-800">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Target Yield</p>
-                  <p className="text-sm font-bold text-emerald-400 font-mono">{product.yieldRate}</p>
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Target Yield</p>
+                  <p className="text-xs font-bold text-emerald-600 font-mono">{product.yieldRate}</p>
                 </div>
-                <div className="bg-slate-950/50 rounded-sm p-3 border border-slate-800">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Liquidity</p>
-                  <p className="text-sm font-bold text-slate-300 font-mono">{product.liquidity}</p>
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Liquidity</p>
+                  <p className="text-xs font-bold text-slate-700 font-mono">{product.liquidity}</p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-700/50 mt-auto relative z-10">
+              <div className="pt-4 border-t border-slate-100 mt-auto relative z-10">
                 <button
                   onClick={() => onSelectProduct?.(product.id)}
-                  className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-sm font-bold rounded-sm transition-all duration-200"
+                  className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold uppercase tracking-wider rounded-xl transition-all duration-200 active:scale-95 shadow-sm"
                   aria-label={"Invest in " + product.title}
                 >
                   Allocate Capital
