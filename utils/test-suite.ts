@@ -4,7 +4,8 @@
  * Run these tests to verify all advanced features are working correctly
  */
 
-import { createClient } from "@/utils/supabase/client";
+import { supabase as supabaseInstance } from "@/src/lib/supabase-client";
+const supabase = supabaseInstance;
 import {
   processPurchaseTransaction,
   generateIdempotencyKey,
@@ -13,7 +14,6 @@ import {
   recoverTransaction,
 } from "@/utils/transaction-idempotency";
 
-const supabase = createClient();
 
 /**
  * Test 1: Idempotency Key Generation

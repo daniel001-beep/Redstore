@@ -33,25 +33,6 @@ export async function getTransactionsForUser(userId: string) {
 export async function getDashboardStats(userId: string) {
   const dbTx = await getTransactionsForUser(userId);
   
-  // --- MOCK DATA FALLBACK FOR EMPTY DASHBOARDS ---
-  if (dbTx.length === 0) {
-    const mockBalance = 12500050n; // $125,000.50 in cents
-    const mockChange = 450000n;    // $4,500.00 today
-    
-    const mockTransactions = [
-      { id: 'm1', type: 'DEPOSIT', description: 'Institutional Seed Funding', date: new Date().toISOString().split('T')[0], amount: 100000.00, status: 'COMPLETED' },
-      { id: 'm2', type: 'CREDIT', description: 'Treasury Yield Distribution', date: new Date().toISOString().split('T')[0], amount: 25000.50, status: 'COMPLETED' },
-      { id: 'm3', type: 'DEBIT', description: 'Cloud Infrastructure (AWS)', date: new Date().toISOString().split('T')[0], amount: -4500.00, status: 'COMPLETED' },
-    ];
-
-    return {
-      totalBalanceUsd: Number(mockBalance) / 100,
-      dayChangeUsd: Number(mockChange) / 100,
-      transactions: mockTransactions,
-      isDemoData: true
-    };
-  }
-
   let totalBalanceCents = 0n;
   let dayChangeCents = 0n;
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);

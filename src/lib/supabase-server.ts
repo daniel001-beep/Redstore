@@ -8,12 +8,26 @@ import { cookies } from 'next/headers';
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  // Strip quotes, parentheses, and whitespace that could be introduced during build/parsing
+  const supabaseUrl = rawUrl?.replace(/^["'()]+|["'()]+$/g, "").trim();
+  const supabaseAnonKey = rawKey?.replace(/^["'()]+|["'()]+$/g, "").trim();
+
+  let isValidUrl = false;
+  if (supabaseUrl && (supabaseUrl.startsWith("http://") || supabaseUrl.startsWith("https://"))) {
+    try {
+      new URL(supabaseUrl);
+      isValidUrl = !supabaseUrl.includes("YOUR_SUPABASE_URL") && !supabaseUrl.includes("placeholder");
+    } catch {
+      isValidUrl = false;
+    }
+  }
+
+  if (!isValidUrl || !supabaseAnonKey) {
     // Return a dummy client or throw a more descriptive error that we can catch
-    console.error("Supabase environment variables are missing!");
+    console.error("Supabase environment variables are missing or invalid!");
     return null as any;
   }
 

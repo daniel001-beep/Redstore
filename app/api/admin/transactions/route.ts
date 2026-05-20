@@ -10,14 +10,38 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
-// @ts-ignore
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-  {
-    auth: { persistSession: false },
+const getSupabaseUrl = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const cleanUrl = url?.replace(/['"]/g, "").trim();
+  if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+    try {
+      new URL(cleanUrl);
+      if (!cleanUrl.includes("YOUR_SUPABASE_URL") && !cleanUrl.includes("placeholder")) {
+        return cleanUrl;
+      }
+    } catch {}
   }
-);
+  return "https://placeholder.supabase.co";
+};
+
+const getSupabaseKey = () => {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key";
+};
+
+let supabaseAdminInstance: any = null;
+
+const getSupabaseAdmin = () => {
+  if (!supabaseAdminInstance) {
+    supabaseAdminInstance = createClient(
+      getSupabaseUrl(),
+      getSupabaseKey(),
+      {
+        auth: { persistSession: false },
+      }
+    );
+  }
+  return supabaseAdminInstance;
+};
 
 /**
  * GET /api/admin/transactions
@@ -27,6 +51,7 @@ const supabaseAdmin = createClient(
  */
 export async function GET(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     // Verify authorization header
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -132,12 +157,11 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * GET /api/admin/audit-logs
- * 
  * Returns audit logs for admin dashboard
  */
-export async function GET_AuditLogs(request: NextRequest) {
+async function GET_AuditLogs(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const authHeader = request.headers.get("authorization");
     const token = authHeader?.substring(7);
 
@@ -201,6 +225,7 @@ async function logAdminAccess(
   action: string
 ) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const clientIp =
       request.headers.get("x-forwarded-for") ||
       request.headers.get("x-real-ip") ||
@@ -234,6 +259,7 @@ async function logUnauthorizedAccess(
   request: NextRequest
 ) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const clientIp =
       request.headers.get("x-forwarded-for") ||
       request.headers.get("x-real-ip") ||

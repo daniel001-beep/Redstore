@@ -8,7 +8,8 @@
  * - Audit logging
  */
 
-import { createClient } from "@/utils/supabase/client";
+import { supabase as supabaseInstance } from "@/src/lib/supabase-client";
+const supabase = supabaseInstance;
 import crypto from "crypto";
 
 // ============================================================================
@@ -20,6 +21,7 @@ export interface IdempotencyKey {
   createdAt: Date;
   transactionId?: string;
   status?: "pending" | "completed" | "failed";
+  metadata?: Record<string, any>;
 }
 
 export interface TransactionRequest {
@@ -174,7 +176,6 @@ async function getIdempotencyKeyFromIndexedDB(
 export async function processPurchaseTransaction(
   request: TransactionRequest
 ): Promise<TransactionResponse> {
-  const supabase = createClient();
   const userId = request.userId || (await supabase.auth.getUser()).data.user?.id;
 
   if (!userId) {
@@ -191,8 +192,6 @@ export async function processPurchaseTransaction(
 
   // Set context variables for Postgres functions
   try {
-    // This won't work directly from client - we need a server-side endpoint
-    // For now, return the structure for the server to handle
     const { data, error } = await supabase.rpc("process_purchase_transaction", {
       p_user_id: userId,
       p_order_id: request.orderId,
@@ -241,8 +240,6 @@ export async function processPurchaseTransaction(
 export async function getTransactionByIdempotencyKey(
   idempotencyKey: string
 ): Promise<TransactionResponse | null> {
-  const supabase = createClient();
-
   try {
     const { data, error } = await supabase
       .from("transaction")
@@ -276,8 +273,6 @@ export async function getUserTransactionHistory(
   limit: number = 50,
   offset: number = 0
 ): Promise<TransactionResponse[]> {
-  const supabase = createClient();
-
   try {
     const { data, error } = await supabase.rpc(
       "get_user_transaction_history",
@@ -312,8 +307,6 @@ export async function getUserTransactionHistory(
  * Created for cart modifications, address changes, checkout attempts, etc.
  */
 export async function logAuditEvent(entry: AuditLogEntry): Promise<string | null> {
-  const supabase = createClient();
-
   try {
     const clientIp = entry.ipAddress || (await getClientIp());
     const userAgent = entry.userAgent || navigator.userAgent;
@@ -336,7 +329,6 @@ export async function logAuditEvent(entry: AuditLogEntry): Promise<string | null
     return data;
   } catch (error) {
     console.error("Audit logging error:", error);
-    // Don't throw - audit logging failures shouldn't break the app
     return null;
   }
 }
@@ -406,13 +398,10 @@ export async function logCheckoutAttempt(
  */
 async function getClientIp(): Promise<string> {
   try {
-    // Try to get IP from response headers (if running on server)
     if (typeof window === "undefined") {
-      // Server-side - use headers from request
       return "unknown";
     }
 
-    // Client-side fallback
     const response = await fetch("https://api.ipify.org?format=json");
     const data = await response.json();
     return data.ip || "unknown";
@@ -425,8 +414,6 @@ async function getClientIp(): Promise<string> {
  * Generates a SHA256 hash for change verification
  */
 export function generateChangeHash(data: Record<string, any>): string {
-  // This is a placeholder - actual implementation depends on your environment
-  // For client-side, you'd typically use a library like 'js-sha256'
   return JSON.stringify(data);
 }
 
@@ -436,8 +423,6 @@ export function generateChangeHash(data: Record<string, any>): string {
 export async function isTransactionLocked(
   idempotencyKey: string
 ): Promise<boolean> {
-  const supabase = createClient();
-
   try {
     const { data, error } = await supabase
       .from("transaction")
@@ -453,7 +438,6 @@ export async function isTransactionLocked(
       return false;
     }
 
-    // Check if lock has expired
     const lockExpiry = new Date(data.locked_until);
     return lockExpiry > new Date();
   } catch {
@@ -468,8 +452,6 @@ export async function isTransactionLocked(
 export async function verifyTransactionIntegrity(
   transactionId: string
 ): Promise<boolean> {
-  const supabase = createClient();
-
   try {
     const { data, error } = await supabase.rpc(
       "verify_transaction_integrity",
@@ -506,7 +488,6 @@ export async function recoverTransaction(
     return null;
   }
 
-  // Check if transaction already exists with this key
   const existing = await getTransactionByIdempotencyKey(stored.key);
 
   if (existing) {
@@ -514,11 +495,8 @@ export async function recoverTransaction(
     return existing;
   }
 
-  // Try to reprocess if still pending
   if (stored.metadata?.status === "pending") {
     console.log("Attempting to reprocess transaction...");
-    // This would retry the transaction processing
-    // Implementation depends on your payment processor
   }
 
   return null;

@@ -2,21 +2,27 @@
 
 import React, { useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import { Users, Search, Filter, Shield, MoreVertical, Ban, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Users, Search, Filter, Shield, Ban, CheckCircle2, AlertTriangle, ArrowLeft, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function UserManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const mockUsers = [
-    { id: 'usr_001', name: 'Daniel Idowu', email: 'idowuisdaniel1@gmail.com', role: 'Super Admin', status: 'Active', kyc: 'Verified', lastLogin: 'Just now' },
+  const [users, setUsers] = useState([
+    { id: 'usr_001', name: 'Daniel Idowu', email: 'admin@velox.com', role: 'Super Admin', status: 'Active', kyc: 'Verified', lastLogin: 'Just now' },
     { id: 'usr_002', name: 'Alice Chen', email: 'alice.c@yc.com', role: 'Investor', status: 'Active', kyc: 'Verified', lastLogin: '2 hours ago' },
     { id: 'usr_003', name: 'Marcus Sterling', email: 'm.sterling@hedge.io', role: 'Trader', status: 'Active', kyc: 'Pending', lastLogin: '1 day ago' },
     { id: 'usr_004', name: 'Elena Rostova', email: 'elena.r@capital.eu', role: 'User', status: 'Suspended', kyc: 'Failed', lastLogin: '5 days ago' },
     { id: 'usr_005', name: 'David Kim', email: 'dkim@startup.co', role: 'User', status: 'Active', kyc: 'Verified', lastLogin: '1 week ago' },
-  ];
+  ]);
 
-  const filteredUsers = mockUsers.filter(u => 
+  const handleDeleteUser = (id: string, name: string) => {
+    if (window.confirm(`Are you absolutely sure you want to permanently delete user account "${name}"? This action is irreversible.`)) {
+      setUsers(prev => prev.filter(u => u.id !== id));
+    }
+  };
+
+  const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -72,10 +78,10 @@ export default function UserManagementPage() {
         {/* Global Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Total Users', value: '1,248', color: 'text-blue-400' },
-            { label: 'Active Today', value: '342', color: 'text-emerald-400' },
-            { label: 'KYC Pending', value: '18', color: 'text-amber-400' },
-            { label: 'Suspended', value: '5', color: 'text-rose-400' },
+            { label: 'Total Users', value: (1243 + users.length).toString(), color: 'text-blue-400' },
+            { label: 'Active Today', value: (337 + users.filter(u => u.status === 'Active').length).toString(), color: 'text-emerald-400' },
+            { label: 'KYC Pending', value: (13 + users.filter(u => u.kyc === 'Pending').length).toString(), color: 'text-amber-400' },
+            { label: 'Suspended', value: (3 + users.filter(u => u.status === 'Suspended').length).toString(), color: 'text-rose-400' },
           ].map((stat, i) => (
             <div key={i} className="bg-slate-900 border border-slate-800 p-4 rounded-sm">
               <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-1">{stat.label}</p>
@@ -139,8 +145,12 @@ export default function UserManagementPage() {
                     <p className="text-sm text-slate-400 font-medium">{user.lastLogin}</p>
                   </td>
                   <td className="py-4 px-6 text-right">
-                    <button className="p-2 hover:bg-slate-800 rounded-sm transition-colors text-slate-500 hover:text-slate-300">
-                      <MoreVertical className="w-4 h-4" />
+                    <button 
+                      onClick={() => handleDeleteUser(user.id, user.name)}
+                      className="p-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-md transition-colors text-rose-400"
+                      title="Delete User"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>

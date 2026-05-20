@@ -1,8 +1,13 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET,
+    }),
     Credentials({
       name: "Founder Access",
       credentials: {
@@ -10,17 +15,112 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        // Demo Mode Authentication
-        // Accepting any password for the presentation to avoid login friction
-        if (credentials?.email && credentials?.password) {
-          return {
-            id: "vc-demo-id-1",
-            name: "Velox Founder",
-            email: credentials.email as string,
-            isAdmin: true,
-          };
+        if (!credentials?.email || !credentials?.password) {
+          return null;
         }
-        return null;
+
+        const email = (credentials.email as string).toLowerCase().trim();
+        const password = credentials.password as string;
+
+        try {
+          const { db } = await import("@/src/db");
+          const { users } = await import("@/src/db/schema");
+          const { eq } = await import("drizzle-orm");
+
+          const existingUser = await db.query.users.findFirst({
+            where: eq(users.email, email),
+          });
+
+          if (!existingUser) {
+            // dynamic registration of new user
+            const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+            const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+            const isAdmin = (adminEmail && email === adminEmail) || email === "admin@velox.com" || email === "daniel@velox.com";
+            
+            const bcrypt = await import("bcryptjs");
+            const hashedPassword = await bcrypt.hash(password, 12);
+
+            const [newUser] = await db.insert(users).values({
+              id: userId,
+              email: email,
+              name: email.split("@")[0],
+              password: hashedPassword,
+              isAdmin: !!isAdmin,
+            }).returning();
+
+            return {
+              id: newUser.id,
+              name: newUser.name,
+              email: newUser.email,
+              isAdmin: newUser.isAdmin,
+            };
+          } else {
+            const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+            const shouldBeAdmin = (adminEmail && email === adminEmail) || email === "admin@velox.com" || email === "daniel@velox.com";
+
+            // Sync the admin flag in Drizzle if not set
+            if (shouldBeAdmin && !existingUser.isAdmin) {
+              await db.update(users)
+                .set({ isAdmin: true })
+                .where(eq(users.id, existingUser.id));
+              existingUser.isAdmin = true;
+            }
+
+            // If no password saved yet (first time via OAuth/seed), save their password securely
+            if (!existingUser.password) {
+              const bcrypt = await import("bcryptjs");
+              const hashedPassword = await bcrypt.hash(password, 12);
+
+              await db.update(users)
+                .set({ password: hashedPassword })
+                .where(eq(users.id, existingUser.id));
+
+              return {
+                id: existingUser.id,
+                name: existingUser.name,
+                email: existingUser.email,
+                isAdmin: existingUser.isAdmin,
+              };
+            }
+
+            // Verify password matches what was saved
+            let isPasswordValid = false;
+            if (existingUser.password.startsWith("$2a$") || existingUser.password.startsWith("$2b$") || existingUser.password.length > 30) {
+              const bcrypt = await import("bcryptjs");
+              isPasswordValid = await bcrypt.compare(password, existingUser.password);
+            } else {
+              isPasswordValid = existingUser.password === password;
+              if (isPasswordValid) {
+                // Auto-upgrade legacy plain-text password to secure bcrypt hash
+                try {
+                  const bcrypt = await import("bcryptjs");
+                  const hashedPassword = await bcrypt.hash(password, 12);
+                  await db.update(users)
+                    .set({ password: hashedPassword })
+                    .where(eq(users.id, existingUser.id));
+                  console.log(`[Auth] Upgraded plain-text password to bcrypt for ${email}`);
+                } catch (upgradeErr) {
+                  console.error("[Auth] Failed to upgrade legacy password:", upgradeErr);
+                }
+              }
+            }
+
+            if (isPasswordValid) {
+              return {
+                id: existingUser.id,
+                name: existingUser.name,
+                email: existingUser.email,
+                isAdmin: existingUser.isAdmin,
+              };
+            }
+
+            // Wrong password
+            return null;
+          }
+        } catch (err) {
+          console.error("Authorization database query error:", err);
+          return null;
+        }
       }
     })
   ],
@@ -38,8 +138,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.isAdmin = user.isAdmin;
         token.email = user.email; // explicitly store email in token
       }
-      // Grant admin rights if the email matches the environment variable
-      if (token.email && process.env.ADMIN_EMAIL && token.email === process.env.ADMIN_EMAIL) {
+      // Grant admin rights if the email matches the environment variable or explicit admin accounts
+      const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
+      if (token.email && ((adminEmail && token.email === adminEmail) || token.email === "admin@velox.com" || token.email === "daniel@velox.com")) {
         token.isAdmin = true;
       }
       return token;

@@ -10,19 +10,20 @@ import {
   primaryKey,
   serial,
   doublePrecision,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import type { AdapterAccountType } from "next-auth/adapters";
-
-// --- NextAuth Tables ---
+import { type AdapterAccountType } from "next-auth/adapters";
 
 export const users = pgTable("user", {
   id: text("id").notNull().primaryKey(),
   name: text("name"),
   email: text("email").notNull(),
+  password: text("password"),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
   isAdmin: boolean("isAdmin").default(false),
+  securityLockdown: boolean("security_lockdown").default(false),
 });
 
 export const accounts = pgTable(
@@ -69,8 +70,6 @@ export const verificationTokens = pgTable(
   })
 );
 
-// --- Store Tables (Aligned with Seed Route) ---
-
 export const products = pgTable("product", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -79,6 +78,14 @@ export const products = pgTable("product", {
   imageUrl: text("imageurl").notNull(),
   category: text("category").notNull(),
   tags: text("tags").array(),
+  createdAt: timestamp("createdat").defaultNow(),
+});
+
+export const orders = pgTable("order", {
+  id: serial("id").primaryKey(),
+  userId: text("userid").notNull().references(() => users.id),
+  productId: integer("productid").references(() => products.id),
+  status: text("status").notNull().default("pending"),
   createdAt: timestamp("createdat").defaultNow(),
 });
 
@@ -91,15 +98,15 @@ export const reviews = pgTable("review", {
   createdAt: timestamp("createdat").defaultNow(),
 });
 
-// --- Fintech / Ledger Tables ---
-
 export const transactions = pgTable("transaction", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
   orderId: integer("order_id"),
   idempotencyKey: text("idempotency_key"),
-  amount: numeric("amount", { precision: 20, scale: 2 }).notNull(),
-  status: text("status").notNull(), // 'pending', 'completed', 'failed'
+  amount: bigint("amount", { mode: "bigint" }).notNull(),
+  status: text("status").notNull(),
+  hash: text("hash"),
+  previousHash: text("previous_hash"),
   metadata: jsonb("metadata").default({}),
   lockedUntil: timestamp("locked_until"),
   errorMessage: text("error_message"),
@@ -115,7 +122,7 @@ export const ledgerEntries = pgTable("ledger_entry", {
   userId: text("user_id").notNull(),
   accountType: text("account_type").notNull(),
   entryType: text("entry_type").notNull(),
-  amount: numeric("amount", { precision: 20, scale: 2 }).notNull(),
+  amount: bigint("amount", { mode: "bigint" }).notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -134,13 +141,19 @@ export const auditLogs = pgTable("audit_log", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
-export const addressHistory = pgTable("address_history", {
+export const systemHealth = pgTable("system_health", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  issueType: text("issue_type").notNull(),
+  details: text("details"),
+  resolved: boolean("resolved").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const webhookEndpoints = pgTable("webhook_endpoint", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
-  firstName: text("first_name"),
-  lastName: text("last_name"),
-  street: text("street"),
-  city: text("city"),
-  country: text("country"),
+  url: text("url").notNull(),
+  secret: text("secret").notNull(),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });

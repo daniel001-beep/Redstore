@@ -2,7 +2,7 @@
 
 import React from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, PackageSearch } from 'lucide-react';
 

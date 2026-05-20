@@ -1,14 +1,21 @@
 import { db } from "@/src/db";
 import { products } from "@/src/db/schema";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { createClient } from "@/src/lib/supabase-server";
 
 export async function GET(request: Request) {
   try {
-    const session = await auth();
+    const supabase = await createClient();
+    if (!supabase) {
+      return NextResponse.json({ error: "Auth system offline" }, { status: 503 });
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase().trim();
+    const isAdmin = user?.email && adminEmail && user.email.toLowerCase().trim() === adminEmail;
     
     // API Zero-Trust Security: Ensure only authenticated admins can hit this endpoint
-    if (!session || !session.user || !session.user.isAdmin) {
+    if (!user || !isAdmin) {
       return NextResponse.json({ error: "Unauthorized access blocked by API Gateway" }, { status: 401 });
     }
     // Try to count products in the database

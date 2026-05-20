@@ -9,14 +9,40 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
-// @ts-ignore
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-  {
-    auth: { persistSession: false },
+export const dynamic = 'force-dynamic';
+
+const getSupabaseUrl = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const cleanUrl = url?.replace(/['"]/g, "").trim();
+  if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+    try {
+      new URL(cleanUrl);
+      if (!cleanUrl.includes("YOUR_SUPABASE_URL") && !cleanUrl.includes("placeholder")) {
+        return cleanUrl;
+      }
+    } catch {}
   }
-);
+  return "https://placeholder.supabase.co";
+};
+
+const getSupabaseKey = () => {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder-key";
+};
+
+let supabaseAdminInstance: any = null;
+
+const getSupabaseAdmin = () => {
+  if (!supabaseAdminInstance) {
+    supabaseAdminInstance = createClient(
+      getSupabaseUrl(),
+      getSupabaseKey(),
+      {
+        auth: { persistSession: false },
+      }
+    );
+  }
+  return supabaseAdminInstance;
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,19 +56,20 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.substring(7);
+    const client = getSupabaseAdmin();
 
     // Get user from token
     const {
       data: { user },
       error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
+    } = await client.auth.getUser(token);
 
     if (authError || !user) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
     // Verify admin status
-    const { data: userData, error: userError } = await supabaseAdmin
+    const { data: userData, error: userError } = await client
       .from("user")
       .select("is_admin")
       .eq("id", user.id)
@@ -63,7 +90,7 @@ export async function GET(request: NextRequest) {
     const eventType = searchParams.get("event_type");
 
     // Fetch audit logs
-    let query = supabaseAdmin
+    let query = client
       .from("audit_log")
       .select("*", { count: "exact" })
       .order("timestamp", { ascending: false })
@@ -80,7 +107,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get event type counts for filtering
-    const { data: eventCounts } = await supabaseAdmin
+    const { data: eventCounts } = await client
       .from("audit_log")
       .select("event_type", { count: "exact" });
 
@@ -127,12 +154,9 @@ export async function POST(request: NextRequest) {
       "unknown";
     const userAgent = request.headers.get("user-agent") || "unknown";
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-    );
+    const client = getSupabaseAdmin();
 
-    const { data, error } = await supabaseAdmin.rpc("create_audit_log", {
+    const { data, error } = await client.rpc("create_audit_log", {
       p_user_id: userId,
       p_event_type: eventType,
       p_entity_type: entityType,
@@ -167,7 +191,9 @@ async function logAdminAccess(
       request.headers.get("x-real-ip") ||
       "unknown";
 
-    await supabaseAdmin.from("audit_log").insert({
+    const client = getSupabaseAdmin();
+
+    await client.from("audit_log").insert({
       user_id: userId,
       event_type: "admin_action",
       entity_type: "admin",
@@ -191,7 +217,9 @@ async function logUnauthorizedAccess(
       request.headers.get("x-real-ip") ||
       "unknown";
 
-    await supabaseAdmin.from("audit_log").insert({
+    const client = getSupabaseAdmin();
+
+    await client.from("audit_log").insert({
       user_id: userId,
       event_type: "unauthorized_access_attempt",
       entity_type: "admin",

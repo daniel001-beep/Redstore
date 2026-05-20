@@ -1,9 +1,15 @@
 import { Client } from "pg";
 import { NextResponse } from "next/server";
+import { getResilientSession } from "@/src/lib/auth-session";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const session = await getResilientSession();
+  if (!session?.user?.isAdmin) {
+    return NextResponse.json({ error: "Unauthorized access blocked by Zero-Trust API gateway" }, { status: 403 });
+  }
+
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   const connectionString = process.env.POSTGRES_URL;
   

@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession, useSignOut } from '@/app/context/AuthContext';
 import { LogOut, User, Mail } from 'lucide-react';
 
 export default function Account() {
   const { data: session, status } = useSession();
+  const signOut = useSignOut();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ show: false, text: '', type: '' });

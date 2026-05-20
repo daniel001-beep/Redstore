@@ -1,9 +1,40 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export function createClient() {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Only initialize if keys are present to avoid client-side crashes
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null as any;
+  // Strip quotes, parentheses, and whitespace that could be introduced during build/parsing
+  const supabaseUrl = rawUrl?.replace(/^["'()]+|["'()]+$/g, "").trim();
+  const supabaseAnonKey = rawKey?.replace(/^["'()]+|["'()]+$/g, "").trim();
+
+  let isValidUrl = false;
+  if (supabaseUrl && (supabaseUrl.startsWith("http://") || supabaseUrl.startsWith("https://"))) {
+    try {
+      new URL(supabaseUrl);
+      isValidUrl = !supabaseUrl.includes("YOUR_SUPABASE_URL") && !supabaseUrl.includes("placeholder");
+    } catch {
+      isValidUrl = false;
+    }
+  }
+
+  if (!isValidUrl || !supabaseAnonKey) {
+    return createBrowserClient(
+      "https://placeholder.supabase.co",
+      "placeholder-key"
+    );
+  }
+
+  try {
+    return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  } catch (err) {
+    console.error("Failed to create Supabase browser client:", err);
+    return createBrowserClient(
+      "https://placeholder.supabase.co",
+      "placeholder-key"
+    );
+  }
+}
+
+// Retain a singleton client instance for general convenience
+export const supabase = createClient();

@@ -176,7 +176,7 @@ export default function SendMoneyCard({ onTransferSuccess }: SendMoneyCardProps)
           {/* Slide to Confirm Button */}
           <div className="mt-8">
             <p className="text-[10px] text-center font-bold text-slate-500 uppercase tracking-widest mb-2">
-              Requires RLS Authorization
+              Slide to Confirm Transfer
             </p>
             
             <div 
