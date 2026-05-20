@@ -76,7 +76,7 @@ export default function SignIn() {
             <span className="text-[10px] font-bold text-slate-800 tracking-wide font-mono">VELOX LEDGER LINK</span>
           </div>
           <p className="text-slate-400 text-[9px] font-bold font-mono uppercase tracking-widest">
-            NODE IDENTITY INTEGRATION
+            
           </p>
         </div>
 
@@ -197,32 +197,6 @@ export default function SignIn() {
             </button>
 
           </form>
-
-          {/* Compact real-time status card */}
-          <div className="bg-[#f8fafc] border border-slate-200/50 rounded-xl p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-ping"></div>
-                <span className="text-[8px] font-bold text-slate-500 font-mono tracking-wider">LEDGER TUNNEL</span>
-              </div>
-              <span className="text-[8px] font-bold text-slate-400 font-mono">{systemTime}</span>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 text-left">
-              <div className="bg-white border border-slate-200/40 p-2 rounded-lg space-y-0.5">
-                <span className="text-[7.5px] font-bold text-slate-400 block font-mono">ENCRYPTION</span>
-                <span className="text-[10px] font-extrabold text-slate-700 flex items-center gap-0.5 font-mono">
-                  <Lock className="w-3 h-3 text-indigo-500" /> AES_256
-                </span>
-              </div>
-              <div className="bg-white border border-slate-200/40 p-2 rounded-lg space-y-0.5">
-                <span className="text-[7.5px] font-bold text-slate-400 block font-mono">RLS SCHEMA</span>
-                <span className="text-[10px] font-extrabold text-slate-700 flex items-center gap-0.5 font-mono">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-500" /> ENFORCED
-                </span>
-              </div>
-            </div>
-          </div>
 
           {/* Account Enrollment Link */}
           <div className="text-center pt-0.5 text-[11px] text-slate-400 font-medium">

@@ -119,18 +119,6 @@ export default function SignUp() {
             </div>
           )}
 
-          {/* Quick benefits list */}
-          <div className="space-y-2 py-0.5">
-            <div className="flex items-start gap-2">
-              <span className="text-indigo-600 text-[10px] font-bold font-mono bg-indigo-50 border border-indigo-100 rounded px-1 py-0.2 shrink-0">✓</span>
-              <span style={{ color: '#64748b' }} className="text-[11px] leading-tight">Instant Node Authorization & Supabase</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-indigo-600 text-[10px] font-bold font-mono bg-indigo-50 border border-indigo-100 rounded px-1 py-0.2 shrink-0">✓</span>
-              <span style={{ color: '#64748b' }} className="text-[11px] leading-tight">Vault Auditing and AES_256 Encryption</span>
-            </div>
-          </div>
-
           {/* Credentials Form */}
           <form onSubmit={handleCredentialsSignUp} className="space-y-3.5">
             

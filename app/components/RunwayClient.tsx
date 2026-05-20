@@ -87,16 +87,6 @@ export default function RunwayClient({ initialTransactions = [] }: RunwayClientP
           </div>
         </div>
 
-        {/* Sync Status Banner */}
-        <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex items-center justify-between text-xs font-semibold text-emerald-800 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Automatically synchronized with your Drizzle PostgreSQL Database Ledger</span>
-          </div>
-          <span className="text-[10px] uppercase font-bold text-emerald-600 bg-white border border-emerald-200 px-2.5 py-0.5 rounded-full">
-            Real-Time Sync
-          </span>
-        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           

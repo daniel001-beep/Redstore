@@ -383,12 +383,7 @@ export default function DashboardClient({
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-4xl font-bold text-blue-600 tracking-tight">Dashboard Overview</h1>
-              {isSentinelActive && (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full animate-pulse">
-                  <Zap className="w-3 h-3 text-blue-500 fill-blue-500" />
-                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Sentinel Active</span>
-                </div>
-              )}
+
             </div>
             
             {/* Custom Interactive Mock Date Picker matching the screenshot exactly */}
@@ -582,9 +577,7 @@ export default function DashboardClient({
                 <h2 style={{ color: '#0f172a' }} className="text-base font-bold tracking-tight">Immutable Audit Trail</h2>
                 <p className="text-xs text-slate-400 mt-1">Cryptographically verified logs & ledger audits</p>
               </div>
-              <div className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-sm border border-emerald-100">
-                RLS Active
-              </div>
+
             </div>
             <AuditTimeline transactions={transactions} />
           </div>

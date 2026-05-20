@@ -69,11 +69,7 @@ export default function PortfolioPerformance({ transactions = [], totalBalance }
           <span className="text-[10px] text-slate-400">▼</span>
         </div>
         <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
-          <div className="px-3 py-1.5 border border-slate-200 rounded-lg flex items-center gap-1.5 cursor-pointer hover:bg-slate-50 bg-white transition-colors">
-            <span>Weekly</span>
-            <span className="text-[8px] text-slate-400">▼</span>
-          </div>
-          <span className="text-slate-400">21 Nov 2025 - 27 Nov 2025</span>
+          <span className="text-slate-400">Transaction Activity</span>
         </div>
       </div>
 
