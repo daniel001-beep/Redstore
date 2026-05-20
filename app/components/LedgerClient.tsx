@@ -75,18 +75,26 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
     const fetchInvoices = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/ledger/transaction');
+        const res = await fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           // Map Drizzle transactions to DbInvoice interface
-          const mapped = data.map((tx: any) => ({
-            id: tx.id,
-            client_name: tx.metadata?.client_name || 'Client',
-            description: tx.metadata?.description || 'Transaction',
-            amount: Number(tx.amount) / 100, // Convert from cents
-            status: tx.status === 'completed' ? 'Paid' : 'Pending',
-            created_at: tx.createdAt
-          }));
+          const mapped = data.map((tx: any) => {
+            let meta = tx.metadata;
+            if (typeof meta === 'string') {
+              try {
+                meta = JSON.parse(meta);
+              } catch (e) {}
+            }
+            return {
+              id: tx.id,
+              client_name: meta?.client_name || 'Client',
+              description: meta?.description || tx.description || 'Transaction',
+              amount: Number(tx.amount) / 100, // Convert from cents
+              status: tx.status === 'completed' ? 'Paid' : 'Pending',
+              created_at: tx.createdAt
+            };
+          });
           setInvoices(mapped);
         }
       } catch (err) {

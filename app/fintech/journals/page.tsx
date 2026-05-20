@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/src/lib/supabase-client';
 import DashboardLayout from '@/app/components/DashboardLayout';
+import { useSession } from '@/app/context/AuthContext';
+import { useRouter } from 'next/navigation';
 import { 
   Calendar, 
   Search, 
@@ -20,27 +22,69 @@ import {
 } from 'lucide-react';
 
 export default function JournalsPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const currentUser = session?.user;
+
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [localJournals, setLocalJournals] = useState<any[]>([]);
 
+  // Authentication protection redirect
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin?callbackUrl=/fintech/journals');
+    }
+  }, [status, router]);
+
+  // Load manual journals from localStorage per-user
+  useEffect(() => {
+    if (status === 'authenticated' && currentUser?.id) {
+      const storageKey = `velox_manual_journals_${currentUser.id}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          setLocalJournals(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse local journals:', e);
+        }
+      } else {
+        setLocalJournals([]);
+      }
+    }
+  }, [status, currentUser?.id]);
+
+  // Persist manual journals to localStorage when updated
+  useEffect(() => {
+    if (status === 'authenticated' && currentUser?.id) {
+      const storageKey = `velox_manual_journals_${currentUser.id}`;
+      localStorage.setItem(storageKey, JSON.stringify(localJournals));
+    }
+  }, [localJournals, status, currentUser?.id]);
+
   // Fetch invoices (transactions) on mount
   useEffect(() => {
+    if (status !== 'authenticated' || !currentUser?.id) return;
+
     const fetchInvoices = async () => {
       try {
         const res = await fetch('/api/ledger/transaction');
         if (res.ok) {
           const data = await res.json();
           // Map Drizzle transactions to client format
-          const mapped = data.map((tx: any) => ({
-            id: tx.id,
-            client_name: tx.metadata?.client_name || 'Client',
-            description: tx.metadata?.description || 'Transaction',
-            amount: Number(tx.amount) / 100, // cents to dollars
-            status: tx.status === 'completed' ? 'Paid' : 'Pending',
-            created_at: tx.createdAt
-          }));
+          // Filter dynamically by userId just in case of any edge cases where endpoint returns multiple users or system entries
+          const mapped = data
+            .filter((tx: any) => tx.userId === currentUser.id)
+            .map((tx: any) => ({
+              id: tx.id,
+              userId: tx.userId,
+              client_name: tx.metadata?.client_name || 'Client',
+              description: tx.metadata?.description || 'Transaction',
+              amount: Number(tx.amount) / 100, // cents to dollars
+              status: tx.status === 'completed' ? 'Paid' : 'Pending',
+              created_at: tx.createdAt
+            }));
           setInvoices(mapped);
         }
       } catch (err) {
@@ -48,7 +92,7 @@ export default function JournalsPage() {
       }
     };
     fetchInvoices();
-  }, [activeTab]);
+  }, [activeTab, status, currentUser?.id]);
 
   // Compute live journals list
   const journals = useMemo(() => {
@@ -58,12 +102,12 @@ export default function JournalsPage() {
       gl: inv.id ? `REV/GEL/2025/10/000${inv.id.toString().substring(0, 4)}` : 'REV/GEL/2025/10/0001',
       title: inv.description || `Invoice to ${inv.client_name}`,
       created: inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-GB') : '21/11/2025',
-      by: 'Admin',
+      by: currentUser?.name || currentUser?.email || 'User',
       status: inv.status === 'Paid' ? 'Issued' : 'Waiting'
     }));
 
     return [...localJournals, ...invoiceJournals];
-  }, [invoices, localJournals]);
+  }, [invoices, localJournals, currentUser]);
 
   // Create Journal form state
   const [formData, setFormData] = useState({
@@ -136,12 +180,23 @@ export default function JournalsPage() {
       gl: 'GL/' + Math.floor(1000 + Math.random() * 9000),
       title: formData.title,
       created: new Date().toLocaleDateString(),
-      by: 'Admin',
+      by: currentUser?.name || currentUser?.email || 'User',
       status: 'Waiting'
     };
     setLocalJournals([newEntry, ...localJournals]);
     setActiveTab('list');
   };
+
+  if (status === 'loading') {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-32 space-y-4">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 text-sm font-semibold animate-pulse">Loading secure journal database...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

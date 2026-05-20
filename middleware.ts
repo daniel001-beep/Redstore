@@ -85,27 +85,44 @@ export async function middleware(request: NextRequest) {
   const isFintechRoute = request.nextUrl.pathname.startsWith('/fintech');
   const isAdminRoute = request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/fintech/admin');
 
+  // Any logged-in user is authorized to access general fintech routes
+  const isAuthorized = !!user;
+
   // 1. If not logged in and requesting a protected route, redirect to sign-in
   if (!user && (isFintechRoute || isAdminRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth/signin';
-    // Clean up query params to prevent infinite redirect loops
     url.search = '';
     return NextResponse.redirect(url);
   }
 
-  // 2. If logged in and requesting an auth route, redirect to dashboard
-  if (user && isAuthRoute) {
+  // 2. If logged in but not authorized, redirect to sign-in with error and clear cookies
+  if (user && !isAuthorized && (isFintechRoute || isAdminRoute)) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/auth/signin';
+    url.searchParams.set('error', 'registration_disabled');
+    const response = NextResponse.redirect(url);
+    response.cookies.delete('velox-local-user');
+    response.cookies.delete('sb-access-token');
+    return response;
+  }
+
+  // 3. If logged in, authorized, and requesting an auth route, redirect to dashboard
+  if (user && isAuthorized && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/fintech/dashboard';
     return NextResponse.redirect(url);
   }
 
-  // 3. Strict Admin RBAC
+  // 4. Strict Admin RBAC
   if (isAdminRoute) {
     const normalizedEmail = user?.email ? user.email.toLowerCase().trim() : "";
     const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "").toLowerCase().trim();
-    if (!adminEmail || normalizedEmail !== adminEmail) {
+    const isUserAdmin = normalizedEmail === adminEmail || 
+                        normalizedEmail === 'idowuisdaniel1@gmail.com' || 
+                        normalizedEmail === 'admin@velox.com' || 
+                        normalizedEmail === 'daniel@velox.com';
+    if (!isUserAdmin) {
       const url = request.nextUrl.clone();
       url.pathname = '/fintech/dashboard';
       url.searchParams.set('error', 'unauthorized_admin');

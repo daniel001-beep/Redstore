@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       };
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Database query timed out")), 800)
+        setTimeout(() => reject(new Error("Database query timed out")), 8000)
       );
 
       recentTransactions = await Promise.race([fetchDbTransactions(), timeoutPromise]);
@@ -48,25 +48,28 @@ export default async function DashboardPage() {
     }
   }
 
-  // Calculate real balance from transactions
-  const totalBalanceUsd = recentTransactions.reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
+  // Calculate real balance from transactions (dividing by 100 to convert cents to dollars)
+  const totalBalanceUsd = recentTransactions.reduce((acc, tx) => acc + (Number(tx.amount || 0) / 100), 0);
 
-  // Calculate today's change from transactions created today
+  // Calculate today's change from transactions created today (dividing by 100 to convert cents to dollars)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const dayChangeUsd = recentTransactions
     .filter(tx => tx.createdAt && new Date(tx.createdAt) >= todayStart)
-    .reduce((acc, tx) => acc + Number(tx.amount || 0), 0);
+    .reduce((acc, tx) => acc + (Number(tx.amount || 0) / 100), 0);
   
-  // Format for the UI
-  const uiTransactions = recentTransactions.map(tx => ({
-    id: tx.id,
-    type: Number(tx.amount || 0) > 0 ? 'CREDIT' : 'DEBIT' as 'CREDIT' | 'DEBIT',
-    amount: Number(tx.amount || 0),
-    description: tx.metadata?.description || 'Transaction',
-    date: tx.createdAt ? new Date(tx.createdAt).toLocaleString() : new Date().toLocaleString(),
-    status: tx.status as any,
-  }));
+  // Format for the UI (dividing by 100 to convert cents to dollars)
+  const uiTransactions = recentTransactions.map(tx => {
+    const amountInDollars = Number(tx.amount || 0) / 100;
+    return {
+      id: tx.id,
+      type: amountInDollars > 0 ? 'CREDIT' : 'DEBIT' as 'CREDIT' | 'DEBIT',
+      amount: amountInDollars,
+      description: tx.metadata?.description || 'Transaction',
+      date: tx.createdAt ? new Date(tx.createdAt).toLocaleString() : new Date().toLocaleString(),
+      status: tx.status as any,
+    };
+  });
 
   return (
     <DashboardClient 

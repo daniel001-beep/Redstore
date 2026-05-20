@@ -241,13 +241,13 @@ export default function ReportsPage() {
               </div>
 
               {/* Summary Bottom Line */}
-              <div className="bg-slate-50 border border-slate-200/50 p-6 rounded-lg flex justify-between items-center mt-6">
+              <div className="bg-slate-50 border border-slate-200/50 p-6 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mt-6">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">Net Operating Income</h3>
                   <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Pre-tax consolidated profit margin</p>
                 </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black text-blue-600 font-mono">
+                <div className="text-left sm:text-right w-full sm:w-auto">
+                  <span className="text-xl sm:text-2xl font-black text-blue-600 font-mono break-all block">
                     ${netIncome.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -324,13 +324,13 @@ export default function ReportsPage() {
               </div>
 
               {/* Statement Reconciliation Match */}
-              <div className="bg-slate-50 border border-slate-200/50 p-6 rounded-lg flex justify-between items-center mt-6">
+              <div className="bg-slate-50 border border-slate-200/50 p-6 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mt-6">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">Total Liabilities & Equity Balance</h3>
                   <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Fully reconciled ledger ledger assets match</p>
                 </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black text-blue-600 font-mono">
+                <div className="text-left sm:text-right w-full sm:w-auto">
+                  <span className="text-xl sm:text-2xl font-black text-blue-600 font-mono break-all block">
                     ${(accountsPayable + retainedEarnings).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>

@@ -109,31 +109,64 @@ export default function DashboardClient({
     };
   }, [addNotification, userEmail]);
 
-  // Compute live visual states dynamically based on current invoices table
+  // Compute live visual states dynamically by merging initialTransactions (Drizzle Postgres ledger entries)
+  // and invoices (Supabase real-time invoices)
   const transactions = useMemo<UITransaction[]>(() => {
-    return invoices.map((inv) => ({
-      id: inv.id ? inv.id.toString() : Math.random().toString(),
-      type: inv.amount > 0 ? 'CREDIT' : 'DEBIT',
-      description: inv.description || `Invoice to ${inv.client_name}`,
-      date: inv.created_at ? new Date(inv.created_at).toLocaleString() : new Date().toLocaleString(),
-      amount: inv.amount || 0,
-      status: inv.status === 'Paid' ? 'COMPLETED' : 'PENDING'
-    }));
-  }, [invoices]);
+    const mergedMap = new Map<string, UITransaction>();
+
+    // 1. Seed with initial Drizzle Postgres transactions from server
+    initialTransactions.forEach((tx) => {
+      if (tx && tx.id) {
+        mergedMap.set(tx.id.toString(), {
+          ...tx,
+          id: tx.id.toString(),
+        });
+      }
+    });
+
+    // 2. Merge Supabase invoices, overriding or adding new entries
+    invoices.forEach((inv) => {
+      if (inv && inv.id) {
+        const idStr = inv.id.toString();
+        mergedMap.set(idStr, {
+          id: idStr,
+          type: inv.amount > 0 ? 'CREDIT' : 'DEBIT',
+          description: inv.description || `Invoice to ${inv.client_name}`,
+          date: inv.created_at ? new Date(inv.created_at).toLocaleString() : new Date().toLocaleString(),
+          amount: inv.amount || 0,
+          status: inv.status === 'Paid' ? 'COMPLETED' : 'PENDING'
+        });
+      }
+    });
+
+    const list = Array.from(mergedMap.values());
+
+    // Sort chronologically by date descending
+    return list.sort((a, b) => {
+      const timeA = a.date ? new Date(a.date).getTime() : 0;
+      const timeB = b.date ? new Date(b.date).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [initialTransactions, invoices]);
 
   const balance = useMemo(() => {
-    return invoices
-      .filter((inv) => inv.status === 'Paid')
-      .reduce((acc, inv) => acc + (inv.amount || 0), 0);
-  }, [invoices]);
+    if (transactions.length === 0) return initialBalance;
+    return transactions
+      .filter((tx) => tx.status === 'COMPLETED' || !tx.status)
+      .reduce((acc, tx) => acc + (tx.amount || 0), 0);
+  }, [transactions, initialBalance]);
 
   const dayChange = useMemo(() => {
+    if (transactions.length === 0) return initialChange;
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    return invoices
-      .filter((inv) => inv.created_at && new Date(inv.created_at) >= todayStart)
-      .reduce((acc, inv) => acc + (inv.amount || 0), 0);
-  }, [invoices]);
+    return transactions
+      .filter((tx) => {
+        const txDate = tx.date ? new Date(tx.date) : new Date();
+        return txDate >= todayStart && (tx.status === 'COMPLETED' || !tx.status);
+      })
+      .reduce((acc, tx) => acc + (tx.amount || 0), 0);
+  }, [transactions, initialChange]);
 
   const exchangeRates = {
     USD: 1,
@@ -152,18 +185,18 @@ export default function DashboardClient({
     }).format(converted);
   };
 
-  // Compute real account aging dynamic data based on invoices table, starting clean at empty
+  // Compute real account aging dynamic data based on unified transactions
   const arAgingData = useMemo(() => {
-    const pendingInvoices = invoices.filter(inv => inv.status === 'Pending');
-    if (pendingInvoices.length > 0) {
-      return pendingInvoices.slice(0, 5).map(inv => ({
-        inv: inv.id ? `INV-${inv.id.toString().substring(0, 8).toUpperCase()}` : 'INV/SLS/112025/0142',
-        amt: formatCurrency(inv.amount || 0),
+    const pendingTransactions = transactions.filter(tx => tx.status === 'PENDING');
+    if (pendingTransactions.length > 0) {
+      return pendingTransactions.slice(0, 5).map(tx => ({
+        inv: tx.id ? `TX-${tx.id.toString().substring(0, 8).toUpperCase()}` : 'TX/SLS/112025/0142',
+        amt: formatCurrency(tx.amount || 0),
         days: 'Pending'
       }));
     }
     return [];
-  }, [invoices, currency]);
+  }, [transactions, currency]);
 
   // --- EXPORT ENGINE ---
   const exportToCSV = async () => {
@@ -202,10 +235,10 @@ export default function DashboardClient({
     });
   };
 
-  const gmvSum = invoices.reduce((acc, inv) => acc + (inv.amount || 0), 0);
-  const gpSum = invoices.filter(inv => inv.status === 'Paid').reduce((acc, inv) => acc + (inv.amount || 0), 0);
-  const apSum = invoices.filter(inv => inv.amount < 0).reduce((acc, inv) => acc + Math.abs(inv.amount), 0);
-  const arSum = invoices.filter(inv => inv.status === 'Pending' && inv.amount > 0).reduce((acc, inv) => acc + (inv.amount || 0), 0);
+  const gmvSum = transactions.reduce((acc, tx) => acc + (tx.amount || 0), 0);
+  const gpSum = transactions.filter(tx => tx.status === 'COMPLETED' || !tx.status).reduce((acc, tx) => acc + (tx.amount || 0), 0);
+  const apSum = transactions.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+  const arSum = transactions.filter(tx => tx.status === 'PENDING' && tx.amount > 0).reduce((acc, tx) => acc + (tx.amount || 0), 0);
 
   const formatLiveCurrency = (value: number) => {
     const rate = exchangeRates[currency];

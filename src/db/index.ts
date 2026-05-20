@@ -4,93 +4,98 @@ import * as schema from "./schema";
 import * as fs from "fs";
 import * as path from "path";
 
-const connectionString = process.env.POSTGRES_URL;
+let connectionString = process.env.POSTGRES_URL;
 
-if (!connectionString) {
-  console.warn("WARNING: POSTGRES_URL environment variable is missing.");
+if (connectionString) {
+  connectionString = connectionString.replace(/^["'()]+|["'()]+$/g, '').trim();
+  if (connectionString.includes("44.216.29.125")) {
+    connectionString = connectionString.replace("44.216.29.125:6543", "aws-0-us-east-1.pooler.supabase.com:6543");
+    connectionString = connectionString.replace("44.216.29.125:5432", "aws-0-us-east-1.pooler.supabase.com:5432");
+  }
 }
 
-// Ensure the global Pool prototype query override is loaded once
 const localDbPath = path.join(process.cwd(), "local_dev_db.json");
 
-function getLocalDb() {
-  if (!fs.existsSync(localDbPath)) {
-    const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@velox.com").toLowerCase().trim();
-    try {
-      fs.writeFileSync(localDbPath, JSON.stringify({
-        users: [
-          {
-            id: "user_seed",
-            name: "Idowu Daniel",
-            email: adminEmail,
-            password: "$2a$12$R.P9eP8QdskF/1yF6f4.8eY2m6bC7wZ3zS1J1V6.t9K1F3n4G5e2S", // hashed 'danielpassword123'
-            isAdmin: true,
-            emailVerified: null,
-            image: null,
-            security_lockdown: false
-          }
-        ],
-        transactions: [],
-        ledgerEntries: [],
-        products: [
-          {
-            id: 1,
-            name: "Enterprise Ledger Node",
-            description: "High-performance cryptographically isolated ledger node.",
-            price: 999.00,
-            imageurl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=300",
-            category: "Infrastructure",
-            tags: ["ledger", "enterprise"],
-            createdat: new Date().toISOString()
-          },
-          {
-            id: 2,
-            name: "Sentinel Threat Monitor",
-            description: "Real-time auditing and zero-trust transaction sentinel.",
-            price: 499.00,
-            imageurl: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=300",
-            category: "Security",
-            tags: ["sentinel", "realtime"],
-            createdat: new Date().toISOString()
-          }
-        ],
-        accounts: [],
-        sessions: [],
-        verificationTokens: [],
-        orders: [],
-        reviews: [],
-        auditLogs: [],
-        systemHealth: [],
-        webhookEndpoints: []
-      }, null, 2));
-    } catch (writeErr: any) {
-      console.warn("⚠️ [Resilient DB] Could not write seed to local JSON database (Read-only environment):", writeErr.message);
-    }
-  }
-  
+let inMemoryDb: any = null;
+
+export function getLocalDb() {
+  const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@velox.com").toLowerCase().trim();
+  const defaultDb = {
+    users: [
+      {
+        id: "user_seed",
+        name: "Idowu Daniel",
+        email: adminEmail,
+        password: "$2a$12$R.P9eP8QdskF/1yF6f4.8eY2m6bC7wZ3zS1J1V6.t9K1F3n4G5e2S", // hashed 'danielpassword123'
+        isAdmin: true,
+        emailVerified: null,
+        image: null,
+        security_lockdown: false
+      }
+    ],
+    transactions: [],
+    ledgerEntries: [],
+    products: [
+      {
+        id: 1,
+        name: "Enterprise Ledger Node",
+        description: "High-performance cryptographically isolated ledger node.",
+        price: 999.00,
+        imageurl: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=300",
+        category: "Infrastructure",
+        tags: ["ledger", "enterprise"],
+        createdat: new Date().toISOString()
+      },
+      {
+        id: 2,
+        name: "Sentinel Threat Monitor",
+        description: "Real-time auditing and zero-trust transaction sentinel.",
+        price: 499.00,
+        imageurl: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=300",
+        category: "Security",
+        tags: ["sentinel", "realtime"],
+        createdat: new Date().toISOString()
+      }
+    ],
+    accounts: [],
+    sessions: [],
+    verificationTokens: [],
+    orders: [],
+    reviews: [],
+    auditLogs: [],
+    systemHealth: [],
+    webhookEndpoints: []
+  };
+
   try {
+    if (!fs.existsSync(localDbPath)) {
+      try {
+        fs.writeFileSync(localDbPath, JSON.stringify(defaultDb, null, 2));
+      } catch (writeErr: any) {
+        console.warn("⚠️ [Resilient DB] Could not write seed to local JSON database (Read-only environment):", writeErr.message);
+        if (!inMemoryDb) {
+          inMemoryDb = defaultDb;
+        }
+      }
+    }
+    
+    if (inMemoryDb) return inMemoryDb;
     return JSON.parse(fs.readFileSync(localDbPath, "utf-8"));
   } catch (e) {
-    // If JSON is malformed, recreate it to prevent crash
-    const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@velox.com").toLowerCase().trim();
-    try {
-      fs.writeFileSync(localDbPath, JSON.stringify({
-        users: [{ id: "user_seed", name: "Idowu Daniel", email: adminEmail, password: "$2a$12$R.P9eP8QdskF/1yF6f4.8eY2m6bC7wZ3zS1J1V6.t9K1F3n4G5e2S", isAdmin: true, emailVerified: null, image: null, security_lockdown: false }],
-        transactions: [], ledgerEntries: [], products: [], accounts: [], sessions: [], verificationTokens: [], orders: [], reviews: [], auditLogs: [], systemHealth: [], webhookEndpoints: []
-      }, null, 2));
-    } catch (writeErr: any) {
-      console.warn("⚠️ [Resilient DB] Bypassed malformed recreate write:", writeErr.message);
+    if (!inMemoryDb) {
+      inMemoryDb = defaultDb;
     }
-    return JSON.parse(fs.readFileSync(localDbPath, "utf-8"));
+    return inMemoryDb;
   }
 }
 
-function saveLocalDb(data: any) {
+export function saveLocalDb(data: any) {
   try {
     fs.writeFileSync(localDbPath, JSON.stringify(data, (key, value) =>
       typeof value === 'bigint' ? value.toString() : value, 2));
   } catch (writeErr: any) {
     console.warn("⚠️ [Resilient DB] Bypassed local database save (likely Read-only environment like Vercel):", writeErr.message);
+    inMemoryDb = data;
   }
 }
 
@@ -194,14 +199,50 @@ function formatQueryResult(text: any, localResult: any[]) {
   };
 }
 
+function parseTableName(sql: string): string {
+  const sqlLower = sql.toLowerCase();
+  const tables = [
+    "user", "transaction", "ledger_entry", "product", "account", "session", 
+    "verificationToken", "order", "review", "audit_log", "system_health", "webhook_endpoint"
+  ];
+  
+  for (const t of tables) {
+    const regex = new RegExp(`(?:from|into|update|delete\\s+from|insert\\s+into)\\s+(?:"?public"?\\.)?"?${t}"?\\b`, "i");
+    if (regex.test(sql)) {
+      return t;
+    }
+  }
+
+  const fallbackMatch = sql.match(/(?:from|into|update|delete\s+from|insert\s+into)\s+(?:"?public"?\\.)?"?([a-zA-Z_0-9]+)"?/i);
+  if (fallbackMatch) {
+    const matched = fallbackMatch[1].replace(/['"`]/g, '').toLowerCase();
+    if (tables.includes(matched)) return matched;
+    if (matched === "users") return "user";
+    if (matched === "transactions") return "transaction";
+    if (matched === "ledger_entries") return "ledger_entry";
+    if (matched === "products") return "product";
+    if (matched === "accounts") return "account";
+    if (matched === "sessions") return "session";
+    if (matched === "orders") return "order";
+    if (matched === "reviews") return "review";
+    if (matched === "audit_logs") return "audit_log";
+    if (matched === "system_healths") return "system_health";
+    if (matched === "webhook_endpoints") return "webhook_endpoint";
+    return matched;
+  }
+
+  return "";
+}
+
 function emulateSqlQuery(sql: string, params: any[]) {
   const db = getLocalDb();
   const sqlLower = sql.toLowerCase();
+  const table = parseTableName(sql);
 
-  console.log(`[Resilient DB] Emulating SQL query locally: ${sql.slice(0, 120)}...`);
+  console.log(`[Resilient DB] Emulating SQL query locally on table "${table}": ${sql.slice(0, 120)}...`);
 
   // 1. SELECT "user"
-  if (sqlLower.includes('select') && sqlLower.includes('from "user"')) {
+  if (sqlLower.includes('select') && table === 'user') {
     let result = db.users.map(u => ({
       ...u,
       emailVerified: u.emailVerified || u.email_verified,
@@ -211,11 +252,19 @@ function emulateSqlQuery(sql: string, params: any[]) {
       securityLockdown: u.securityLockdown || u.security_lockdown,
       security_lockdown: u.securityLockdown || u.security_lockdown,
     }));
-    if (sqlLower.includes('"email" = $1') || sqlLower.includes('email = $1')) {
-      const email = params[0]?.toLowerCase().trim();
+    const whereClause = sqlLower.split('where')[1] || "";
+    
+    // Scrape correct parameter dynamically based on column order
+    const emailMatch = whereClause.match(/email\s*=\s*\$(\d+)/i);
+    const idMatch = whereClause.match(/id\s*=\s*\$(\d+)/i);
+    
+    if (emailMatch) {
+      const idx = parseInt(emailMatch[1]) - 1;
+      const email = params[idx]?.toLowerCase().trim();
       result = result.filter(u => u.email?.toLowerCase().trim() === email);
-    } else if (sqlLower.includes('"id" = $1') || sqlLower.includes('id = $1')) {
-      const id = params[0];
+    } else if (idMatch) {
+      const idx = parseInt(idMatch[1]) - 1;
+      const id = params[idx];
       result = result.filter(u => u.id === id);
     }
     if (sqlLower.includes('limit $') || sqlLower.includes('limit 1')) {
@@ -225,7 +274,7 @@ function emulateSqlQuery(sql: string, params: any[]) {
   }
 
   // 2. SELECT "transaction"
-  if (sqlLower.includes('select') && sqlLower.includes('from "transaction"')) {
+  if (sqlLower.includes('select') && table === 'transaction') {
     let result = db.transactions.map(t => {
       const user = db.users.find(u => u.id === t.userId || u.id === t.user_id);
       return {
@@ -258,11 +307,19 @@ function emulateSqlQuery(sql: string, params: any[]) {
         "user.email": user ? user.email : null,
       };
     });
-    if (sqlLower.includes('"user_id" = $1') || sqlLower.includes('user_id = $1')) {
-      const userId = params[0];
+    const whereClause = sqlLower.split('where')[1] || "";
+    
+    // Scrape correct parameter dynamically based on column order
+    const userMatch = whereClause.match(/user_id\s*=\s*\$(\d+)/i);
+    const idempMatch = whereClause.match(/idempotency_key\s*=\s*\$(\d+)/i);
+    
+    if (userMatch) {
+      const idx = parseInt(userMatch[1]) - 1;
+      const userId = params[idx];
       result = result.filter(t => t.userId === userId || t.user_id === userId);
-    } else if (sqlLower.includes('"idempotency_key" = $1') || sqlLower.includes('idempotency_key = $1')) {
-      const key = params[0];
+    } else if (idempMatch) {
+      const idx = parseInt(idempMatch[1]) - 1;
+      const key = params[idx];
       result = result.filter(t => t.idempotencyKey === key || t.idempotency_key === key);
     }
     if (sqlLower.includes('order by') && sqlLower.includes('created_at') && sqlLower.includes('desc')) {
@@ -275,7 +332,7 @@ function emulateSqlQuery(sql: string, params: any[]) {
   }
 
   // 3. SELECT "ledger_entry"
-  if (sqlLower.includes('select') && sqlLower.includes('from "ledger_entry"')) {
+  if (sqlLower.includes('select') && table === 'ledger_entry') {
     let result = db.ledgerEntries.map(e => ({
       ...e,
       transactionId: e.transactionId || e.transaction_id,
@@ -289,24 +346,32 @@ function emulateSqlQuery(sql: string, params: any[]) {
       createdAt: e.createdAt || e.created_at,
       created_at: e.createdAt || e.created_at,
     }));
-    if (sqlLower.includes('"user_id" = $1') || sqlLower.includes('user_id = $1')) {
-      const userId = params[0];
+    const whereClause = sqlLower.split('where')[1] || "";
+    
+    // Scrape correct parameter dynamically based on column order
+    const userMatch = whereClause.match(/user_id\s*=\s*\$(\d+)/i);
+    const txMatch = whereClause.match(/transaction_id\s*=\s*\$(\d+)/i);
+    
+    if (userMatch) {
+      const idx = parseInt(userMatch[1]) - 1;
+      const userId = params[idx];
       result = result.filter(e => e.userId === userId || e.user_id === userId);
-    } else if (sqlLower.includes('"transaction_id" = $1') || sqlLower.includes('transaction_id = $1')) {
-      const txId = params[0];
+    } else if (txMatch) {
+      const idx = parseInt(txMatch[1]) - 1;
+      const txId = params[idx];
       result = result.filter(e => e.transactionId === txId || e.transaction_id === txId);
     }
     return result;
   }
 
   // 4. SELECT "product"
-  if (sqlLower.includes('select') && sqlLower.includes('from "product"')) {
+  if (sqlLower.includes('select') && table === 'product') {
     return [...db.products];
   }
 
   // 5. INSERT INTO "user"
-  if (sqlLower.includes('insert into "user"')) {
-    const columnsMatch = sql.match(/insert into "user"\s*\(([^)]+)\)\s*values/i);
+  if (sqlLower.includes('insert into') && table === 'user') {
+    const columnsMatch = sql.match(/insert into\s+(?:"?public"?\.)?"?user"?\s*\(([^)]+)\)\s*values/i);
     const columns = columnsMatch 
       ? columnsMatch[1].split(',').map(c => c.replace(/['"`\s]/g, '')) 
       : [];
@@ -344,7 +409,6 @@ function emulateSqlQuery(sql: string, params: any[]) {
       }
     });
 
-    // Make sure admin is ALWAYS admin automatically
     const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
     if (adminEmail && newUser.email?.toLowerCase().trim() === adminEmail) {
       newUser.isAdmin = true;
@@ -357,8 +421,8 @@ function emulateSqlQuery(sql: string, params: any[]) {
   }
 
   // 6. INSERT INTO "transaction"
-  if (sqlLower.includes('insert into "transaction"')) {
-    const columnsMatch = sql.match(/insert into "transaction"\s*\(([^)]+)\)\s*values/i);
+  if (sqlLower.includes('insert into') && table === 'transaction') {
+    const columnsMatch = sql.match(/insert into\s+(?:"?public"?\.)?"?transaction"?\s*\(([^)]+)\)\s*values/i);
     const columns = columnsMatch 
       ? columnsMatch[1].split(',').map(c => c.replace(/['"`\s]/g, '').toLowerCase()) 
       : [];
@@ -434,8 +498,8 @@ function emulateSqlQuery(sql: string, params: any[]) {
   }
 
   // 7. INSERT INTO "ledger_entry"
-  if (sqlLower.includes('insert into "ledger_entry"')) {
-    const columnsMatch = sql.match(/insert into "ledger_entry"\s*\(([^)]+)\)\s*values/i);
+  if (sqlLower.includes('insert into') && table === 'ledger_entry') {
+    const columnsMatch = sql.match(/insert into\s+(?:"?public"?\.)?"?ledger_entry"?\s*\(([^)]+)\)\s*values/i);
     const columns = columnsMatch 
       ? columnsMatch[1].split(',').map(c => c.replace(/['"`\s]/g, '').toLowerCase()) 
       : [];
@@ -486,21 +550,35 @@ function emulateSqlQuery(sql: string, params: any[]) {
   }
 
   // 8. UPDATE "user"
-  if (sqlLower.includes('update "user"')) {
-    // Parse which columns are being set and in what parameter index order
-    // e.g. update "user" set "password" = $1, "isAdmin" = $2 where "id" = $3
+  if (sqlLower.includes('update') && table === 'user') {
     const setMatch = sql.match(/set\s+([\s\S]+?)\s+where/i);
     const sets = setMatch 
       ? setMatch[1].split(',').map(s => s.trim().split('=')[0].replace(/['"`\s]/g, ''))
       : [];
 
     let userIndex = -1;
-    if (sqlLower.includes('where "id" =') || sqlLower.includes('where id =')) {
-      const id = params[params.length - 1];
+    const whereClause = sqlLower.split('where')[1] || "";
+    
+    // Find correct param dynamically
+    const idMatch = whereClause.match(/id\s*=\s*\$(\d+)/i);
+    const emailMatch = whereClause.match(/email\s*=\s*\$(\d+)/i);
+    
+    if (idMatch) {
+      const idx = parseInt(idMatch[1]) - 1;
+      const id = params[idx];
       userIndex = db.users.findIndex(u => u.id === id);
-    } else if (sqlLower.includes('where "email" =') || sqlLower.includes('where email =')) {
-      const email = params[params.length - 1]?.toLowerCase().trim();
+    } else if (emailMatch) {
+      const idx = parseInt(emailMatch[1]) - 1;
+      const email = params[idx]?.toLowerCase().trim();
       userIndex = db.users.findIndex(u => u.email?.toLowerCase().trim() === email);
+    } else {
+      // Fallback to last parameter
+      const fallbackVal = params[params.length - 1];
+      if (typeof fallbackVal === 'string' && fallbackVal.includes('@')) {
+        userIndex = db.users.findIndex(u => u.email?.toLowerCase().trim() === fallbackVal.toLowerCase().trim());
+      } else {
+        userIndex = db.users.findIndex(u => u.id === fallbackVal);
+      }
     }
 
     if (userIndex !== -1) {
@@ -516,7 +594,6 @@ function emulateSqlQuery(sql: string, params: any[]) {
         }
       });
 
-      // Enforce admin email rule
       const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
       if (adminEmail && user.email?.toLowerCase().trim() === adminEmail) {
         user.isAdmin = true;
@@ -527,7 +604,7 @@ function emulateSqlQuery(sql: string, params: any[]) {
     }
   }
 
-  // 9. DELETE cascades for admin user deletion
+  // 9. DELETE
   if (sqlLower.includes('delete from "ledger_entry"')) {
     const userId = params[0];
     db.ledgerEntries = db.ledgerEntries.filter(e => e.userId !== userId);
@@ -549,237 +626,552 @@ function emulateSqlQuery(sql: string, params: any[]) {
 
   return [];
 }
-// Global offline mode flag to cache connection failures and prevent network timeouts on every query
-let isDatabaseOffline = !process.env.POSTGRES_URL;
 
-// Wrap pg Pool prototype query globally so it is always active
-const originalQuery = Pool.prototype.query;
-// @ts-ignore
-Pool.prototype.query = function (text, values, callback) {
+function normalizeQueryArgs(text: any, values: any, cb: any) {
   let queryText = "";
   let queryValues: any[] = [];
-  let cb: any = callback;
+  let callbackFn: any = undefined;
 
   if (typeof text === "object" && text !== null) {
-    queryText = (text as any).text || "";
-    queryValues = Array.isArray(values) ? values : ((text as any).values || []);
-    cb = Array.isArray(values) ? callback : values;
+    queryText = text.text || "";
+    queryValues = text.values || [];
+    callbackFn = cb || text.callback;
+    if (typeof values === "function") {
+      callbackFn = values;
+    } else if (Array.isArray(values)) {
+      queryValues = values;
+    }
   } else {
-    queryText = (text as any) || "";
-    queryValues = values || [];
-  }
-
-  // Fast offline bypass
-  if (isDatabaseOffline) {
-    try {
-      const localResult = emulateSqlQuery(queryText, queryValues);
-      const res = formatQueryResult(text, localResult);
-      if (typeof cb === "function") {
-        cb(null, res);
-        return this;
-      }
-      return Promise.resolve(res);
-    } catch (emulateErr: any) {
-      return Promise.reject(emulateErr);
+    queryText = text || "";
+    if (typeof values === "function") {
+      callbackFn = values;
+      queryValues = [];
+    } else {
+      queryValues = Array.isArray(values) ? values : [];
+      callbackFn = cb;
     }
   }
 
-  const promise = new Promise((resolve, reject) => {
-    originalQuery.call(this, text, values, (err, res) => {
-      if (err) {
-        const errMsg = err.message || "";
-        if (
-          errMsg.includes("Tenant or user not found") ||
-          errMsg.includes("ENOTFOUND") ||
-          errMsg.includes("connect") ||
-          errMsg.includes("timeout") ||
-          err.code === "XX000"
-        ) {
-          isDatabaseOffline = true;
-          console.warn("⚠️ [Resilient DB Query] Database connection failure. Routing query to local dev database...");
-          try {
-            const localResult = emulateSqlQuery(queryText, queryValues);
-            const res = formatQueryResult(text, localResult);
-            return resolve(res);
-          } catch (emulateErr: any) {
-            console.error("❌ [Resilient DB Query] Local emulation failed:", emulateErr);
-            return reject(err);
-          }
-        }
-        return reject(err);
-      }
-      resolve(res);
-    });
-  });
+  return { queryText, queryValues, callbackFn };
+}
 
-  if (typeof cb === "function") {
-    // @ts-ignore
-    promise.then(res => cb(null, res)).catch(err => cb(err));
-    return this;
+// -----------------------------------------------------------------------------
+// SUPABASE HTTP REST ENGINE (POSTGREST TRANSLATION SYSTEM)
+// -----------------------------------------------------------------------------
+
+function normalizeRowKeys(row: any) {
+  if (!row || typeof row !== 'object') return row;
+  
+  const normalized: any = { ...row };
+  
+  if (row.user && typeof row.user === 'object') {
+    normalized.userName = row.user.name;
+    normalized.userEmail = row.user.email;
+    normalized.user_name = row.user.name;
+    normalized.user_email = row.user.email;
+    normalized.users_name = row.user.name;
+    normalized.users_email = row.user.email;
+    normalized["users.name"] = row.user.name;
+    normalized["users.email"] = row.user.email;
   }
 
-  return promise;
+  for (const key of Object.keys(row)) {
+    const val = row[key];
+    
+    if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+      for (const nestedKey of Object.keys(val)) {
+        const nestedVal = val[nestedKey];
+        normalized[`${key}_${nestedKey}`] = nestedVal;
+        normalized[`${key}${nestedKey.charAt(0).toUpperCase()}${nestedKey.slice(1)}`] = nestedVal;
+        normalized[`${key}.${nestedKey}`] = nestedVal;
+        if (normalized[nestedKey] === undefined) {
+          normalized[nestedKey] = nestedVal;
+        }
+      }
+    }
+
+    if (key.includes('_')) {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (normalized[camelKey] === undefined) {
+        normalized[camelKey] = val;
+      }
+    }
+    
+    const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    if (snakeKey !== key && normalized[snakeKey] === undefined) {
+      normalized[snakeKey] = val;
+    }
+  }
+
+  if (normalized.amount !== undefined && normalized.amount !== null) {
+    try {
+      normalized.amount = BigInt(normalized.amount);
+    } catch (e) {}
+  }
+  
+  for (const k of Object.keys(normalized)) {
+    if (k.toLowerCase().includes('date') || k.toLowerCase().includes('time') || k.toLowerCase().includes('_at')) {
+      const dateVal = normalized[k];
+      if (typeof dateVal === 'string' && !isNaN(Date.parse(dateVal))) {
+        normalized[k] = new Date(dateVal);
+      }
+    }
+  }
+
+  return normalized;
+}
+
+async function fetchSupabaseTable(table: string, urlParams: string = ""): Promise<any[]> {
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://lyhgfezubrbgikuxhcug.supabase.co").trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+
+  const url = `${supabaseUrl}/rest/v1/${table}?${urlParams}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "apikey": supabaseKey,
+      "Authorization": `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+    }
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`GET ${table} failed: ${text}`);
+  }
+  return response.json();
+}
+
+async function executeSupabaseRest(sql: string, params: any[]): Promise<any[]> {
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://lyhgfezubrbgikuxhcug.supabase.co").trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase URL or Key environment variables are missing");
+  }
+
+  const sqlLower = sql.toLowerCase();
+  const sqlTrim = sqlLower.trim();
+
+  // Bypass Transaction Control SQL immediately
+  if (
+    ["begin", "commit", "rollback", "abort", "start transaction"].includes(sqlTrim) ||
+    sqlTrim.startsWith("begin ") ||
+    sqlTrim.startsWith("commit ") ||
+    sqlTrim.startsWith("rollback ") ||
+    sqlTrim.startsWith("abort ")
+  ) {
+    console.log(`[Supabase REST Bypass] Bypassed transaction control statement: "${sql}"`);
+    return [];
+  }
+
+  let table = "";
+  const tables = [
+    "user", "transaction", "ledger_entry", "product", "account", "session", 
+    "verificationToken", "order", "review", "audit_log", "system_health", "webhook_endpoint"
+  ];
+  
+  for (const t of tables) {
+    const regex = new RegExp(`(?:from|into|update|delete\\s+from)\\s+["']?${t}["']?`, "i");
+    if (regex.test(sql)) {
+      table = t;
+      break;
+    }
+  }
+
+  if (!table) {
+    const tableMatch = sql.match(/(?:from|into|update|delete\s+from)\s+["']?([a-zA-Z_0-9]+)["']?/i);
+    if (tableMatch) {
+      table = tableMatch[1];
+    }
+  }
+
+  if (!table) {
+    if (sqlLower.includes("create table") || sqlLower.includes("alter table")) {
+      return [];
+    }
+    throw new Error(`Could not parse table name from query: ${sql}`);
+  }
+
+  table = table.replace(/['"`]/g, '');
+
+  let url = `${supabaseUrl}/rest/v1/${table}`;
+  let method = "GET";
+  let body: any = null;
+  const headers: Record<string, string> = {
+    "apikey": supabaseKey,
+    "Authorization": `Bearer ${supabaseKey}`,
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+  };
+
+  // 1. Join operations
+  if (sqlLower.includes("left join")) {
+    let joinedTable = "";
+    for (const t of tables) {
+      if (t !== table && new RegExp(`left\\s+join\\s+["']?${t}["']?`, "i").test(sql)) {
+        joinedTable = t;
+        break;
+      }
+    }
+
+    let primaryParams = "select=*";
+    const whereMatch = sql.match(/where\s+([\s\S]+?)(?:order\s+by|limit|$)/i);
+    if (whereMatch) {
+      const wherePart = whereMatch[1];
+      const matches = wherePart.matchAll(/([a-zA-Z_0-9."'-]+)\s*=\s*\$(\d+)/g);
+      for (const match of matches) {
+        const rawCol = match[1];
+        const paramIdx = parseInt(match[2]) - 1;
+        const val = params[paramIdx];
+        if (val !== undefined && val !== null) {
+          const colName = rawCol.replace(/['"`]/g, '').split('.').pop()!;
+          primaryParams += `&${colName}=eq.${encodeURIComponent(val.toString())}`;
+        }
+      }
+    }
+
+    if (sqlLower.includes('order by')) {
+      const orderPart = sql.split(/order\s+by/i)[1] || "";
+      const orderMatch = orderPart.match(/([a-zA-Z_0-9."'-]+)\s+(desc|asc)/i);
+      if (orderMatch) {
+        const colName = orderMatch[1].replace(/['"`]/g, '').split('.').pop()!;
+        const direction = orderMatch[2].toLowerCase();
+        primaryParams += `&order=${colName}.${direction}`;
+      }
+    }
+
+    if (sqlLower.includes('limit')) {
+      const limitPart = sql.split(/limit/i)[1]?.trim() || "";
+      const limitValMatch = limitPart.match(/^(\d+)/);
+      if (limitValMatch) {
+        primaryParams += `&limit=${limitValMatch[1]}`;
+      } else {
+        const limitParamMatch = limitPart.match(/^\$(\d+)/);
+        if (limitParamMatch) {
+          const paramIdx = parseInt(limitParamMatch[1]) - 1;
+          const val = params[paramIdx];
+          if (val !== undefined) {
+            primaryParams += `&limit=${val}`;
+          }
+        }
+      }
+    }
+
+    console.log(`[Supabase REST Join] Fetching table "${table}" and joined table "${joinedTable}"...`);
+    const primaryRows = await fetchSupabaseTable(table, primaryParams);
+    let joinedRows: any[] = [];
+    if (joinedTable) {
+      try {
+        joinedRows = await fetchSupabaseTable(joinedTable);
+      } catch (err) {
+        console.warn(`[Supabase REST Join] Failed to fetch joined table "${joinedTable}":`, err);
+      }
+    }
+
+    const mergedRows = primaryRows.map((row: any) => {
+      const matched = joinedRows.find((j: any) => j.id === row.user_id || j.id === row.userId);
+      return {
+        ...row,
+        [joinedTable]: matched || null
+      };
+    });
+
+    return mergedRows.map(normalizeRowKeys);
+  }
+
+  // 2. Standard Operations
+  if (sqlLower.includes("select")) {
+    method = "GET";
+    url += "?select=*";
+
+    const whereMatch = sql.match(/where\s+([\s\S]+?)(?:order\s+by|limit|$)/i);
+    if (whereMatch) {
+      const wherePart = whereMatch[1];
+      const matches = wherePart.matchAll(/([a-zA-Z_0-9."'-]+)\s*=\s*\$(\d+)/g);
+      for (const match of matches) {
+        const rawCol = match[1];
+        const paramIdx = parseInt(match[2]) - 1;
+        const val = params[paramIdx];
+        if (val !== undefined && val !== null) {
+          const colName = rawCol.replace(/['"`]/g, '').split('.').pop()!;
+          url += `&${colName}=eq.${encodeURIComponent(val.toString())}`;
+        }
+      }
+    }
+
+    if (sqlLower.includes('order by')) {
+      const orderPart = sql.split(/order\s+by/i)[1] || "";
+      const orderMatch = orderPart.match(/([a-zA-Z_0-9."'-]+)\s+(desc|asc)/i);
+      if (orderMatch) {
+        const colName = orderMatch[1].replace(/['"`]/g, '').split('.').pop()!;
+        const direction = orderMatch[2].toLowerCase();
+        url += `&order=${colName}.${direction}`;
+      } else {
+        const colMatch = orderPart.match(/([a-zA-Z_0-9."'-]+)/);
+        if (colMatch) {
+          const colName = colMatch[1].replace(/['"`]/g, '').split('.').pop()!;
+          url += `&order=${colName}.asc`;
+        }
+      }
+    }
+
+    if (sqlLower.includes('limit')) {
+      const limitPart = sql.split(/limit/i)[1]?.trim() || "";
+      const limitValMatch = limitPart.match(/^(\d+)/);
+      if (limitValMatch) {
+        url += `&limit=${limitValMatch[1]}`;
+      } else {
+        const limitParamMatch = limitPart.match(/^\$(\d+)/);
+        if (limitParamMatch) {
+          const paramIdx = parseInt(limitParamMatch[1]) - 1;
+          const val = params[paramIdx];
+          if (val !== undefined) {
+            url += `&limit=${val}`;
+          }
+        }
+      }
+    }
+
+  } else if (sqlLower.includes("insert into")) {
+    method = "POST";
+    const columnsMatch = sql.match(/insert\s+into\s+[\s\S]+?\(([^)]+)\)\s*values/i);
+    if (columnsMatch) {
+      const columns = columnsMatch[1].split(',').map(c => c.replace(/['"`\s]/g, ''));
+      const valuesPart = sql.substring(sql.toLowerCase().indexOf('values') + 6).trim();
+      const blocks = valuesPart.match(/\(([^)]+)\)/g) || [];
+      
+      const insertRecords: any[] = [];
+      if (blocks.length > 0) {
+        blocks.forEach((block) => {
+          const exprs = block.replace(/[()]/g, '').split(',').map(e => e.trim());
+          const record: any = {};
+          columns.forEach((col, idx) => {
+            const expr = exprs[idx];
+            if (expr && expr.startsWith('$')) {
+              const paramIdx = parseInt(expr.substring(1)) - 1;
+              const val = params[paramIdx];
+              if (val !== undefined) {
+                record[col] = val;
+              }
+            }
+          });
+          insertRecords.push(record);
+        });
+      }
+      
+      body = insertRecords.length === 1 ? insertRecords[0] : insertRecords;
+    } else {
+      throw new Error(`Could not parse INSERT columns from SQL: ${sql}`);
+    }
+
+    if (sqlLower.includes("on conflict")) {
+      headers["Prefer"] = "resolution=merge-duplicates,return=representation";
+    }
+
+  } else if (sqlLower.includes("update")) {
+    method = "PATCH";
+    
+    const setMatch = sql.match(/set\s+([\s\S]+?)\s+where/i);
+    if (setMatch) {
+      const setPart = setMatch[1];
+      const setExprs = setPart.split(',').map(s => s.trim());
+      const updateBody: any = {};
+      
+      setExprs.forEach((expr) => {
+        const parts = expr.split('=');
+        if (parts.length === 2) {
+          const colName = parts[0].replace(/['"`\s]/g, '').split('.').pop()!;
+          const right = parts[1].trim();
+          if (right.startsWith('$')) {
+            const paramIdx = parseInt(right.substring(1)) - 1;
+            const val = params[paramIdx];
+            if (val !== undefined) {
+              updateBody[colName] = val;
+            }
+          }
+        }
+      });
+      body = updateBody;
+    } else {
+      throw new Error(`Could not parse UPDATE SET clause from SQL: ${sql}`);
+    }
+
+    const wherePart = sql.split(/where/i)[1] || "";
+    const matches = wherePart.matchAll(/([a-zA-Z_0-9."'-]+)\s*=\s*\$(\d+)/g);
+    let filterAdded = false;
+    url += "?";
+    for (const match of matches) {
+      const rawCol = match[1];
+      const paramIdx = parseInt(match[2]) - 1;
+      const val = params[paramIdx];
+      if (val !== undefined && val !== null) {
+        const colName = rawCol.replace(/['"`]/g, '').split('.').pop()!;
+        url += `${filterAdded ? '&' : ''}${colName}=eq.${encodeURIComponent(val.toString())}`;
+        filterAdded = true;
+      }
+    }
+
+  } else if (sqlLower.includes("delete from")) {
+    method = "DELETE";
+    headers["Confirm"] = "true";
+
+    const wherePart = sql.split(/where/i)[1] || "";
+    const matches = wherePart.matchAll(/([a-zA-Z_0-9."'-]+)\s*=\s*\$(\d+)/g);
+    let filterAdded = false;
+    url += "?";
+    for (const match of matches) {
+      const rawCol = match[1];
+      const paramIdx = parseInt(match[2]) - 1;
+      const val = params[paramIdx];
+      if (val !== undefined && val !== null) {
+        const colName = rawCol.replace(/['"`]/g, '').split('.').pop()!;
+        url += `${filterAdded ? '&' : ''}${colName}=eq.${encodeURIComponent(val.toString())}`;
+        filterAdded = true;
+      }
+    }
+  } else {
+    throw new Error(`Unsupported SQL command in Supabase REST translator: ${sql}`);
+  }
+
+  console.log(`[Supabase REST] ${method} ${url.slice(0, 120)}`);
+  
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body, (key, val) => typeof val === "bigint" ? Number(val) : val) : undefined
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[Supabase REST Error] HTTP ${response.status}: ${errorText}`);
+    if (sqlLower.includes("on conflict") && response.status === 409) {
+      return [];
+    }
+    throw new Error(`Supabase REST API returned ${response.status}: ${errorText}`);
+  }
+
+  const responseText = await response.text();
+  if (!responseText) return [];
+  
+  const resultData = JSON.parse(responseText);
+  const normalizedResult = Array.isArray(resultData) ? resultData : [resultData];
+  
+  return normalizedResult.map(normalizeRowKeys);
+}
+
+// -----------------------------------------------------------------------------
+// POSTGRES PROTOTYPE OVERRIDES
+// -----------------------------------------------------------------------------
+
+const originalQuery = Pool.prototype.query;
+// @ts-ignore
+Pool.prototype.query = function (text, values, callback) {
+  const { queryText, queryValues, callbackFn } = normalizeQueryArgs(text, values, callback);
+
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+
+  if (supabaseUrl && supabaseKey) {
+    const promise = executeSupabaseRest(queryText, queryValues)
+      .then((restResult) => {
+        return formatQueryResult(text, restResult);
+      })
+      .catch((err) => {
+        console.error("❌ [Supabase REST Redirect Failure] Fallback to local dev database:", err.message);
+        const localResult = emulateSqlQuery(queryText, queryValues);
+        return formatQueryResult(text, localResult);
+      });
+
+    if (typeof callbackFn === "function") {
+      promise.then(
+        (res) => callbackFn(null, res),
+        (err) => callbackFn(err)
+      );
+      return this;
+    }
+    return promise;
+  }
+
+  try {
+    const localResult = emulateSqlQuery(queryText, queryValues);
+    const res = formatQueryResult(text, localResult);
+    if (typeof callbackFn === "function") {
+      callbackFn(null, res);
+      return this;
+    }
+    return Promise.resolve(res);
+  } catch (emulateErr: any) {
+    if (typeof callbackFn === "function") {
+      callbackFn(emulateErr);
+      return this;
+    }
+    return Promise.reject(emulateErr);
+  }
 };
 
-// Wrap pg Pool prototype connect globally for robust offline transactions
 const originalConnect = Pool.prototype.connect;
 // @ts-ignore
 Pool.prototype.connect = async function (callback) {
-  if (isDatabaseOffline) {
-    const mockClient = {
-      query: function (text: any, values: any, cb: any) {
-        let queryText = "";
-        let queryValues: any[] = [];
-        let callbackFn: any = cb;
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
-        if (typeof text === "object" && text !== null) {
-          queryText = text.text || "";
-          queryValues = Array.isArray(values) ? values : (text.values || []);
-          callbackFn = Array.isArray(values) ? cb : values;
-        } else {
-          queryText = text || "";
-          queryValues = values || [];
+  const mockClient = {
+    query: function (text: any, values: any, cb: any) {
+      const { queryText, queryValues, callbackFn } = normalizeQueryArgs(text, values, cb);
+
+      if (supabaseUrl && supabaseKey) {
+        const promise = executeSupabaseRest(queryText, queryValues)
+          .then((restResult) => {
+            return formatQueryResult(text, restResult);
+          })
+          .catch((err) => {
+            console.error("❌ [Supabase REST Client Redirect Failure] Fallback to local database:", err.message);
+            const localResult = emulateSqlQuery(queryText, queryValues);
+            return formatQueryResult(text, localResult);
+          });
+
+        if (typeof callbackFn === "function") {
+          promise.then(
+            (res) => callbackFn(null, res),
+            (err) => callbackFn(err)
+          );
+          return mockClient;
         }
+        return promise;
+      }
 
+      try {
         const localResult = emulateSqlQuery(queryText, queryValues);
         const res = formatQueryResult(text, localResult);
-
         if (typeof callbackFn === "function") {
           callbackFn(null, res);
           return mockClient;
         }
         return Promise.resolve(res);
-      },
-      release: () => {},
-      on: () => {},
-      once: () => {},
-      emit: () => {},
-      removeListener: () => {},
-      removeAllListeners: () => {},
-      off: () => {}
-    };
+      } catch (emulateErr: any) {
+        if (typeof callbackFn === "function") {
+          callbackFn(emulateErr);
+          return mockClient;
+        }
+        return Promise.reject(emulateErr);
+      }
+    },
+    release: () => {},
+    on: () => {},
+    once: () => {},
+    emit: () => {},
+    removeListener: () => {},
+    removeAllListeners: () => {},
+    off: () => {}
+  };
 
-    if (typeof callback === "function") {
-      callback(null, mockClient as any, () => {});
-    }
-    return mockClient as any;
+  if (typeof callback === "function") {
+    callback(null, mockClient as any, () => {});
   }
-
-  try {
-    const client = await originalConnect.call(this);
-    
-    // Wrap the acquired client's query method just in case
-    const originalClientQuery = client.query;
-    // @ts-ignore
-    client.query = function (text, values, cb) {
-      let queryText = "";
-      let queryValues: any[] = [];
-      let callbackFn: any = cb;
-
-      if (typeof text === "object" && text !== null) {
-        queryText = (text as any).text || "";
-        queryValues = Array.isArray(values) ? values : ((text as any).values || []);
-        callbackFn = Array.isArray(values) ? cb : values;
-      } else {
-        queryText = (text as any) || "";
-        queryValues = values || [];
-      }
-
-      const promise = new Promise((resolve, reject) => {
-        originalClientQuery.call(client, text, values, (err, res) => {
-          if (err) {
-            const errMsg = err.message || "";
-            if (
-              errMsg.includes("Tenant or user not found") ||
-              errMsg.includes("ENOTFOUND") ||
-              errMsg.includes("connect") ||
-              errMsg.includes("timeout") ||
-              err.code === "XX000"
-            ) {
-              isDatabaseOffline = true;
-              console.warn("⚠️ [Resilient DB Client] Database connection failure. Routing query to local dev database...");
-              try {
-                const localResult = emulateSqlQuery(queryText, queryValues);
-                const res = formatQueryResult(text, localResult);
-                return resolve(res);
-              } catch (emulateErr: any) {
-                console.error("❌ [Resilient DB Client] Local emulation failed:", emulateErr);
-                return reject(err);
-              }
-            }
-            return reject(err);
-          }
-          resolve(res);
-        });
-      });
-
-      if (typeof callbackFn === "function") {
-        // @ts-ignore
-        promise.then(res => callbackFn(null, res)).catch(err => callbackFn(err));
-        return client;
-      }
-      return promise;
-    };
-
-    if (typeof callback === "function") {
-      callback(null, client, () => client.release());
-    }
-    return client;
-  } catch (err: any) {
-    const errMsg = err.message || "";
-    if (
-      errMsg.includes("Tenant or user not found") ||
-      errMsg.includes("ENOTFOUND") ||
-      errMsg.includes("connect") ||
-      errMsg.includes("timeout") ||
-      err.code === "XX000"
-    ) {
-      isDatabaseOffline = true;
-      console.warn("⚠️ [Resilient DB Pool] Database connect failed. Emulating connection offline with mock client...");
-      
-      const mockClient = {
-        query: function (text: any, values: any, cb: any) {
-          let queryText = "";
-          let queryValues: any[] = [];
-          let callbackFn: any = cb;
-
-          if (typeof text === "object" && text !== null) {
-            queryText = text.text || "";
-            queryValues = Array.isArray(values) ? values : (text.values || []);
-            callbackFn = Array.isArray(values) ? cb : values;
-          } else {
-            queryText = text || "";
-            queryValues = values || [];
-          }
-
-          const localResult = emulateSqlQuery(queryText, queryValues);
-          const res = formatQueryResult(text, localResult);
-
-          if (typeof callbackFn === "function") {
-            callbackFn(null, res);
-            return mockClient;
-          }
-          return Promise.resolve(res);
-        },
-        release: () => {},
-        on: () => {},
-        once: () => {},
-        emit: () => {},
-        removeListener: () => {},
-        removeAllListeners: () => {},
-        off: () => {}
-      };
-
-      if (typeof callback === "function") {
-        callback(null, mockClient as any, () => {});
-      }
-      return mockClient as any;
-    }
-    throw err;
-  }
+  return mockClient as any;
 };
 
-// Use global caching of pool to prevent HMR leaks
 const globalForDb = global as unknown as { pool: Pool | undefined };
 
 if (!globalForDb.pool) {
@@ -790,7 +1182,7 @@ if (!globalForDb.pool) {
       : { rejectUnauthorized: false }, 
     max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 1000, // Speed up failover connection check to 1 second
+    connectionTimeoutMillis: 1000,
   });
 
   globalForDb.pool.on("error", (err) => {

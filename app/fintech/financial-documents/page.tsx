@@ -33,19 +33,22 @@ export default async function LedgerPage() {
       };
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Database query timed out")), 800)
+        setTimeout(() => reject(new Error("Database query timed out")), 8000)
       );
 
       const dbTransactions = await Promise.race([fetchDbTransactions(), timeoutPromise]);
 
-      realTransactions = dbTransactions.map(tx => ({
-        id: tx.id,
-        type: Number(tx.amount) > 0 ? 'CREDIT' : 'DEBIT',
-        description: (tx.metadata as any)?.description || `Transaction ${tx.id.substring(0, 8)}`,
-        date: tx.createdAt ? new Date(tx.createdAt).toISOString().split('T')[0] : 'N/A',
-        amount: Number(tx.amount),
-        status: tx.status?.toUpperCase() || 'COMPLETED',
-      }));
+      realTransactions = dbTransactions.map(tx => {
+        const amountInDollars = Number(tx.amount) / 100;
+        return {
+          id: tx.id,
+          type: amountInDollars > 0 ? 'CREDIT' : 'DEBIT',
+          description: (tx.metadata as any)?.description || `Transaction ${tx.id.substring(0, 8)}`,
+          date: tx.createdAt ? new Date(tx.createdAt).toISOString().split('T')[0] : 'N/A',
+          amount: amountInDollars,
+          status: tx.status?.toUpperCase() || 'COMPLETED',
+        };
+      });
       // Succeeded! Reset circuit breaker
       isDatabaseOffline = false;
     } catch (err) {

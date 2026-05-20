@@ -4,9 +4,9 @@ export function createClient() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Strip quotes and whitespace that could be introduced during build/parsing
-  const supabaseUrl = rawUrl?.replace(/['"]/g, "").trim();
-  const supabaseAnonKey = rawKey?.replace(/['"]/g, "").trim();
+  // Strip quotes, parentheses, and whitespace that could be introduced during build/parsing
+  const supabaseUrl = rawUrl?.replace(/^["'()]+|["'()]+$/g, "").trim();
+  const supabaseAnonKey = rawKey?.replace(/^["'()]+|["'()]+$/g, "").trim();
 
   let isValidUrl = false;
   if (supabaseUrl && (supabaseUrl.startsWith("http://") || supabaseUrl.startsWith("https://"))) {

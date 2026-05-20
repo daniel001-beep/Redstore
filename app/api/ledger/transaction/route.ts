@@ -8,7 +8,7 @@ import { transactionRateLimiter } from '@/src/lib/ratelimit';
 import { dispatchWebhook } from '@/src/lib/webhooks';
 import { cookies } from 'next/headers';
 
-
+export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies();
@@ -254,10 +254,47 @@ export async function GET(req: Request) {
     }
 
     // Fetch user's transactions only
-    const userTransactions = await db.query.transactions.findMany({
-      where: eq(transactions.userId, userId),
-      orderBy: [desc(transactions.createdAt)],
-    });
+    let userTransactions: any[] = [];
+    try {
+      userTransactions = await db.query.transactions.findMany({
+        where: eq(transactions.userId, userId),
+        orderBy: [desc(transactions.createdAt)],
+      });
+    } catch (drizzleErr) {
+      console.warn('[GET Transactions] Drizzle query failed, falling back to Supabase REST API:', drizzleErr);
+    }
+
+    // If transactions from Drizzle are empty, let's also fetch from Supabase 'invoices' REST API to ensure persistence on ephemeral environments like Vercel!
+    if (userTransactions.length === 0) {
+      try {
+        const { supabase } = await import('@/src/lib/supabase-client');
+        if (supabase) {
+          const { data: supabaseInvoices, error: supabaseErr } = await supabase
+            .from('invoices')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+          if (!supabaseErr && supabaseInvoices && supabaseInvoices.length > 0) {
+            console.log(`[GET Transactions] Fetched ${supabaseInvoices.length} invoices from Supabase REST API fallback`);
+            const mappedInvoices = supabaseInvoices.map((inv: any) => ({
+              id: inv.id || `tx_${Math.random().toString(36).substring(2, 11)}`,
+              userId: inv.user_id || userId,
+              amount: (Number(inv.amount || 0) * 100).toString(),
+              status: inv.status === 'Paid' ? 'completed' : 'pending',
+              createdAt: inv.created_at || new Date().toISOString(),
+              metadata: {
+                client_name: inv.client_name || 'Client',
+                description: inv.description || 'Invoice',
+              }
+            }));
+            userTransactions = mappedInvoices;
+          }
+        }
+      } catch (err) {
+        console.error('[GET Transactions] Failed to fetch fallback invoices from Supabase:', err);
+      }
+    }
 
     // Serialize BigInt safely for JSON
     const serialized = JSON.parse(
