@@ -10,7 +10,7 @@
 ## 🎬 Native Architecture Walkthrough
 Witness the system execution, real-time database state transitions, and responsive financial layouts in high fidelity.
 
-[![Watch the Velox Demo](https://github.com/user-attachments/assets/74bb6575-b657-4185-9bdf-2877149021e1)](https://lyhgfezubrbgikuxhcug.supabase.co/storage/v1/object/public/velox/Screen%20Recording%202026-05-20%20205157%20(1).mp4)
+[![Watch the Velox Demo](https://raw.githubusercontent.com/denton-fl/readme-assets/main/video-placeholder.png)](https://lyhgfezubrbgikuxhcug.supabase.co/storage/v1/object/public/velox/Screen%20Recording%202026-05-20%20205157%20(1).mp4)
 
 *💡 **Click the preview card above** to watch the full 2-minute system walkthrough directly streaming inside your browser tab (No download required).*
 
