@@ -167,11 +167,17 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
         });
 
         if (active) {
-          setInvoices(mergedList);
-          
-          // Cache the newly retrieved list
-          if (userEmail) {
-            localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(mergedList));
+          // CRITICAL: Only overwrite state if we got actual data.
+          // If merged is empty, preserve cached invoices so they never disappear.
+          if (mergedList.length > 0) {
+            setInvoices(mergedList);
+            
+            // Cache the newly retrieved list
+            if (userEmail) {
+              localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(mergedList));
+            }
+          } else {
+            console.warn('LedgerClient: Both sources returned empty — preserving cached invoices');
           }
         }
       } catch (err) {

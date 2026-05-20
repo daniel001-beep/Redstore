@@ -6,10 +6,6 @@ import { getResilientSession } from "@/src/lib/auth-session";
 
 export const dynamic = "force-dynamic";
 
-// Global Circuit Breaker to prevent database timeout delays for subsequent requests
-let isDatabaseOffline = false;
-let lastOfflineCheck = 0;
-
 export default async function DashboardPage() {
   const session = await getResilientSession();
   const userId = session?.user?.id;
@@ -17,44 +13,33 @@ export default async function DashboardPage() {
   let recentTransactions: any[] = [];
   let isDemoData = false;
 
-  const now = Date.now();
-  const shouldSkipDb = isDatabaseOffline && (now - lastOfflineCheck < 300000); // Cache offline status for 5 mins
+  try {
+    const fetchDbTransactions = async () => {
+      if (!userId) return [];
+      return db.query.transactions.findMany({
+        where: eq(transactions.userId, userId),
+        orderBy: [desc(transactions.createdAt)],
+      });
+    };
 
-  if (shouldSkipDb) {
-    recentTransactions = []; // Start cleanly
-  } else {
-    try {
-      const fetchDbTransactions = async () => {
-        if (!userId) return [];
-        return db.query.transactions.findMany({
-          where: eq(transactions.userId, userId),
-          orderBy: [desc(transactions.createdAt)],
-          limit: 10,
-        });
-      };
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Database query timed out")), 5000)
+    );
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Database query timed out")), 3000)
-      );
-
-      recentTransactions = await Promise.race([fetchDbTransactions(), timeoutPromise]);
-      // If we succeed, reset the circuit breaker
-      isDatabaseOffline = false;
-    } catch (err) {
-      console.warn("⚠️ Dashboard Database offline. Velox running seamlessly in Offline Demo Mode.");
-      isDatabaseOffline = true;
-      lastOfflineCheck = Date.now();
-      recentTransactions = []; // Start cleanly at 0.00
-    }
+    recentTransactions = await Promise.race([fetchDbTransactions(), timeoutPromise]);
+  } catch (err) {
+    console.warn("⚠️ Dashboard Database offline. Client will load from cache.");
+    isDemoData = true;
+    recentTransactions = [];
   }
 
-  // Calculate real balance from transactions (dividing by 100 to convert cents to dollars)
+  // Calculate real balance from ALL transactions (dividing by 100 to convert cents to dollars)
   // Only sum completed transactions so that pending invoice requests don't inflate cash balances
   const totalBalanceUsd = recentTransactions
     .filter(tx => tx.status === 'completed' || tx.status === 'COMPLETED')
     .reduce((acc, tx) => acc + (Number(tx.amount || 0) / 100), 0);
 
-  // Calculate today's change from completed transactions created today (dividing by 100 to convert cents to dollars)
+  // Calculate today's change from completed transactions created today
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const dayChangeUsd = recentTransactions

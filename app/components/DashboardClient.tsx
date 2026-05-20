@@ -47,15 +47,30 @@ export default function DashboardClient({
   const { addNotification } = useNotifications();
   const [invoices, setInvoices] = useState<any[]>([]);
   // Fresh API transactions fetched client-side — always up-to-date
-  const [apiTransactions, setApiTransactions] = useState<UITransaction[]>(initialTransactions);
+  // Initialize empty — we load from cache immediately in the first useEffect
+  const [apiTransactions, setApiTransactions] = useState<UITransaction[]>([]);
 
   // Load from localStorage cache on mount for instant sub-0.1s loading
+  // This runs BEFORE any API fetch, so cached data is always visible first
   useEffect(() => {
+    // First, seed from server-rendered initialTransactions if they have data
+    if (initialTransactions && initialTransactions.length > 0) {
+      setApiTransactions(initialTransactions);
+    }
+
     if (userEmail) {
       const cached = localStorage.getItem(`velox_cached_api_transactions_${userEmail}`);
       if (cached) {
         try {
-          setApiTransactions(JSON.parse(cached));
+          const parsedCache = JSON.parse(cached);
+          // Only use cache if it has data AND is larger than server data
+          if (parsedCache.length > 0) {
+            setApiTransactions(prev => {
+              // Merge: keep whichever has more entries
+              if (parsedCache.length >= prev.length) return parsedCache;
+              return prev;
+            });
+          }
         } catch (e) {
           console.warn('Failed to parse cached dashboard transactions:', e);
         }
@@ -70,40 +85,56 @@ export default function DashboardClient({
         }
       }
     }
-  }, [userEmail]);
+  }, [userEmail, initialTransactions]);
 
   // Fetch fresh transactions from the API on mount and after any change
-  // This is the primary data source — more reliable than stale server render
+  // CRITICAL: Only overwrite state if the API returns ACTUAL data.
+  // If the API fails or returns empty, we preserve the cached data.
   const fetchLatestTransactions = useCallback(async () => {
     try {
       const res = await fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        const mapped: UITransaction[] = data.map((tx: any) => {
-          const amountInDollars = Number(tx.amount) / 100;
-          let meta = tx.metadata;
-          if (typeof meta === 'string') {
-            try {
-              meta = JSON.parse(meta);
-            } catch (e) {}
-          }
-          return {
-            id: tx.id?.toString(),
-            type: amountInDollars > 0 ? 'CREDIT' : 'DEBIT',
-            description: meta?.description || tx.description || 'Transaction',
-            date: tx.createdAt ? new Date(tx.createdAt).toLocaleString() : new Date().toLocaleString(),
-            amount: amountInDollars,
-            status: tx.status?.toUpperCase() || 'COMPLETED',
-          };
-        });
-        setApiTransactions(mapped);
-        
-        // Cache the newly retrieved list
-        if (userEmail) {
-          localStorage.setItem(`velox_cached_api_transactions_${userEmail}`, JSON.stringify(mapped));
+      
+      // If the API returns a non-OK status (e.g., 503 database unavailable),
+      // DO NOT overwrite the client cache — just silently skip
+      if (!res.ok) {
+        console.warn('Dashboard: API returned non-OK status:', res.status, '— preserving cached data');
+        return;
+      }
+      
+      const data = await res.json();
+      
+      // CRITICAL: If the API returns an empty array, do NOT overwrite existing cached data.
+      // This prevents the "disappearing balance" bug caused by Drizzle timeouts.
+      if (!Array.isArray(data) || data.length === 0) {
+        console.warn('Dashboard: API returned empty data — preserving cached transactions');
+        return;
+      }
+      
+      const mapped: UITransaction[] = data.map((tx: any) => {
+        const amountInDollars = Number(tx.amount) / 100;
+        let meta = tx.metadata;
+        if (typeof meta === 'string') {
+          try {
+            meta = JSON.parse(meta);
+          } catch (e) {}
         }
+        return {
+          id: tx.id?.toString(),
+          type: amountInDollars > 0 ? 'CREDIT' : 'DEBIT',
+          description: meta?.description || tx.description || 'Transaction',
+          date: tx.createdAt ? new Date(tx.createdAt).toLocaleString() : new Date().toLocaleString(),
+          amount: amountInDollars,
+          status: tx.status?.toUpperCase() || 'COMPLETED',
+        };
+      });
+      setApiTransactions(mapped);
+      
+      // Cache the newly retrieved list
+      if (userEmail) {
+        localStorage.setItem(`velox_cached_api_transactions_${userEmail}`, JSON.stringify(mapped));
       }
     } catch (err) {
+      // Network error — preserve cached data, don't wipe it
       console.error('Dashboard: Failed to fetch transactions from API:', err);
     }
   }, [userEmail]);

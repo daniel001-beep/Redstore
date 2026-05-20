@@ -39,9 +39,12 @@ export default function ProductDetailsPage({ params }: { params: Promise<{ id: s
       }
       
       fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' })
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) return null;
+          return res.json();
+        })
         .then(data => {
-          if (Array.isArray(data)) {
+          if (Array.isArray(data) && data.length > 0) {
             const mapped = data.map((tx: any) => {
               const amountInDollars = Number(tx.amount) / 100;
               let meta = tx.metadata;

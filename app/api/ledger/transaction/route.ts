@@ -189,6 +189,7 @@ export async function GET(req: Request) {
     }
 
     // 1. Define the Drizzle fetch with a resilient 5000ms timeout
+    let drizzleSucceeded = false;
     const fetchDrizzleTransactions = async (): Promise<any[]> => {
       try {
         const drizzleQuery = db.query.transactions.findMany({
@@ -198,7 +199,9 @@ export async function GET(req: Request) {
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("Drizzle query timed out")), 5000)
         );
-        return await Promise.race([drizzleQuery, timeoutPromise]);
+        const result = await Promise.race([drizzleQuery, timeoutPromise]);
+        drizzleSucceeded = true;
+        return result;
       } catch (drizzleErr) {
         console.warn('[GET Transactions] Drizzle query failed or timed out:', drizzleErr);
         return [];
@@ -206,6 +209,7 @@ export async function GET(req: Request) {
     };
 
     // 2. Define the Supabase fetch
+    let supabaseSucceeded = false;
     const fetchSupabaseTransactions = async (): Promise<any[]> => {
       if (!userEmail) return [];
       try {
@@ -219,6 +223,7 @@ export async function GET(req: Request) {
           .order('created_at', { ascending: false });
 
         if (!supabaseErr && supabaseInvoices && supabaseInvoices.length > 0) {
+          supabaseSucceeded = true;
           return supabaseInvoices.map((inv: any) => ({
             id: inv.id?.toString() || `sb_${Math.random().toString(36).substring(2, 11)}`,
             userId: inv.user_id || userId,
@@ -231,6 +236,8 @@ export async function GET(req: Request) {
             }
           }));
         }
+        // No error, just no data — that's still a successful query
+        supabaseSucceeded = true;
       } catch (err) {
         console.error('[GET Transactions] Failed to fetch invoices from Supabase:', err);
       }
@@ -243,7 +250,16 @@ export async function GET(req: Request) {
       fetchSupabaseTransactions()
     ]);
 
-    // 3. Merge both Drizzle and Supabase lists to avoid duplicates and ensure perfect UI alignment
+    // CRITICAL: If both sources failed AND returned empty, return 503 so the client
+    // preserves its localStorage cache instead of overwriting it with nothing
+    if (!drizzleSucceeded && !supabaseSucceeded) {
+      return NextResponse.json(
+        { error: 'Database temporarily unavailable', retryable: true },
+        { status: 503 }
+      );
+    }
+
+    // 4. Merge both Drizzle and Supabase lists to avoid duplicates
     const mergedMap = new Map<string, any>();
     
     // Seed with Drizzle transactions first
