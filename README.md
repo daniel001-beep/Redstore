@@ -3,14 +3,16 @@
 
 > **Architect’s Note:** Velox is not a generic "dashboard clone." It is a specialized financial engine built by a **Mid-Level Architect with a background in Accounting.** It treats every transaction as a mission-critical ledger event, prioritizing mathematical certainty over simple CRUD operations.
 
+🖥️ **Live Production Deployment:** [https://velox-fintech.vercel.app](https://velox-fintech.vercel.app)
+
 ---
 
 ## 🎬 Native Architecture Walkthrough
-Witness the system execution, real-time database state transitions, and responsive financial layouts in high fidelity. 
+Witness the system execution, real-time database state transitions, and responsive financial layouts in high fidelity.
 
-<video src="https://lyhgfezubrbgikuxhcug.supabase.co/storage/v1/object/public/velox/Screen%20Recording%202026-05-20%20205157%20(1).mp4" controls width="100%" poster="https://img.youtube.com/vi/mWpHlp2h0Lw/maxresdefault.jpg" style="border-radius: 12px; border: 1px solid #262626; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);"></video>
+[![Watch the Velox Demo](https://img.youtube.com/vi/mWpHlp2h0Lw/maxresdefault.jpg)](https://lyhgfezubrbgikuxhcug.supabase.co/storage/v1/object/public/velox/Screen%20Recording%202026-05-20%20205157%20(1).mp4)
 
-*Click play above to watch the 2-minute system walkthrough directly inside your browser.*
+*💡 **Click the preview card above** to watch the full 2-minute system walkthrough directly streaming inside your browser tab (No download required).*
 
 ---
 
