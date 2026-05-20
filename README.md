@@ -5,6 +5,15 @@
 
 ---
 
+## 🎬 Native Architecture Walkthrough
+Witness the system execution, real-time database state transitions, and responsive financial layouts in high fidelity. 
+
+<video src="https://lyhgfezubrbgikuxhcug.supabase.co/storage/v1/object/public/velox/Screen%20Recording%202026-05-20%20205157%20(1).mp4" controls width="100%" poster="https://img.youtube.com/vi/mWpHlp2h0Lw/maxresdefault.jpg" style="border-radius: 12px; border: 1px solid #262626; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);"></video>
+
+*Click play above to watch the 2-minute system walkthrough directly inside your browser.*
+
+---
+
 ## 🏗️ The Engineering Edge: Atomic Guardrails
 Most fintech platforms fail during network dips or high concurrency. Velox prevents "lost funds" and "phantom balances" through a hardened **Double-Entry Logic** architecture.
 
@@ -13,19 +22,21 @@ We do not trust the frontend for security. Isolation is guaranteed at the **Post
 * **Pattern:** Multi-tenant organization isolation.
 * **Logic:** Every query to the `Orders` or `Ledger` table is filtered by the authenticated `auth.uid()`, preventing cross-account data leakage even if the frontend layer is compromised.
 
-### ⚡ 2. Atomic Transaction Handling (ACID)
-To ensure sub-50ms consistency, Velox utilizes **Atomic Guardrails**:
-* **All-or-Nothing (Postgres RPC):** Utilizing stored procedures to ensure that if a credit succeeds but the debit fails, the entire operation **rolls back**.
+### ⚡ 2. High-Velocity Direct REST Architecture
+To bypass the asynchronous cookie limitations and middleware overhead introduced in modern framework updates, Velox utilizes a direct, lightweight **Supabase REST Data Pipeline**.
+* **Zero Bottlenecks:** Eliminates complex session parsing loops, resulting in faster data loading phases and zero auth-lock conditions during high-volume server mutations.
+* **All-or-Nothing (Postgres RPC):** Utilizing stored procedures to ensure that if a credit succeeds but the debit fails, the entire operation **rolls back** safely.
 * **Audit-Ready Schema:** Built on a double-entry system where balances are derived from immutable transaction logs, ensuring a 1:1 reconciliation for financial audits.
 
 ---
 
 ## ✨ What's New (Demo Day Build)
+* **Optimized Direct REST Pipeline:** Complete migration of authentication state logic to a direct REST model, clearing out hydration lag and middleware authentication loops.
 * **Atomic Transfer Engine:** A slide-to-confirm transfer interface guaranteed by PostgreSQL `BEGIN/COMMIT` transactional locks to eliminate double-spend race conditions.
 * **Founder Analytics Suite:** Real-time **Startup Runway Prediction**, Burn Analysis, and Cohort Retention Heatmaps for institutional-grade treasury oversight.
 * **Agentic Command Bar:** A `Cmd+K` AI-powered search bar for rapid data extraction and simulated CSV audit generation.
 * **Super Admin Hub:** A restricted control plane for order reconciliation, global system health monitoring, and user KYC auditing.
-* **Enterprise Security Hardening:** Implemented NextAuth RBAC middleware, Zero-Trust API routes, and XSS sanitization via DOMPurify.
+* **Enterprise Security Hardening:** Implemented custom RBAC verification, Zero-Trust API routes, and XSS sanitization via DOMPurify.
 
 ---
 
@@ -33,7 +44,7 @@ To ensure sub-50ms consistency, Velox utilizes **Atomic Guardrails**:
 * **Framework:** Next.js 15 (App Router) + React 19.
 * **Database:** Supabase (PostgreSQL) + Drizzle ORM for schema-level type safety.
 * **Visuals:** Recharts (High-Fidelity Financial Visualization).
-* **Auth:** NextAuth.js v5 (Edge-compatible Credentials + JWT).
+* **Auth Layer:** Supabase SSR Auth with direct REST fallback optimization.
 * **Performance:** 40% rendering efficiency gain via **Server Components** and optimized data caching patterns.
 
 ---
@@ -45,6 +56,7 @@ This architecture has been **cloned and audited by 800+ developers** on GitHub. 
 
 ## 🚀 Roadmap to Demo Day (June 16)
 * [x] **Hardened Ledger:** Full RLS and Atomic Transaction logic.
+* [x] **Direct REST Pipeline:** Lightweight, high-velocity session management.
 * [x] **Founder Insights:** Automated runway and burn rate forecasting.
 * [x] **Agentic Workflows:** Integrated AI-powered command bar for treasury ops.
 * [ ] **Stripe Connect:** Multi-currency cross-border settlement engine.
