@@ -63,36 +63,57 @@ export default function JournalsPage() {
     }
   }, [localJournals, status, currentUser?.id]);
 
-  // Fetch invoices (transactions) on mount
+  // Fetch invoices (transactions) on mount with instant localStorage cache fallback
   useEffect(() => {
     if (status !== 'authenticated' || !currentUser?.id) return;
 
+    // Load initial invoices from localStorage cache for sub-0.1s load
+    const userEmail = currentUser.email;
+    if (userEmail) {
+      const cached = localStorage.getItem(`velox_cached_invoices_${userEmail}`);
+      if (cached) {
+        try {
+          setInvoices(JSON.parse(cached));
+        } catch (e) {}
+      }
+    }
+
     const fetchInvoices = async () => {
       try {
-        const res = await fetch('/api/ledger/transaction');
+        const res = await fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          // Map Drizzle transactions to client format
-          // Filter dynamically by userId just in case of any edge cases where endpoint returns multiple users or system entries
-          const mapped = data
-            .filter((tx: any) => tx.userId === currentUser.id)
-            .map((tx: any) => ({
+          // Map Drizzle transactions to client format safely parsing metadata
+          const mapped = data.map((tx: any) => {
+            let meta = tx.metadata;
+            if (typeof meta === 'string') {
+              try {
+                meta = JSON.parse(meta);
+              } catch (e) {}
+            }
+            return {
               id: tx.id,
               userId: tx.userId,
-              client_name: tx.metadata?.client_name || 'Client',
-              description: tx.metadata?.description || 'Transaction',
+              client_name: meta?.client_name || 'Client',
+              description: meta?.description || tx.description || 'Transaction',
               amount: Number(tx.amount) / 100, // cents to dollars
               status: tx.status === 'completed' ? 'Paid' : 'Pending',
               created_at: tx.createdAt
-            }));
+            };
+          });
           setInvoices(mapped);
+          
+          // Cache the fresh list for all other pages to use
+          if (userEmail) {
+            localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(mapped));
+          }
         }
       } catch (err) {
         console.error('Error fetching transactions for journals:', err);
       }
     };
     fetchInvoices();
-  }, [activeTab, status, currentUser?.id]);
+  }, [activeTab, status, currentUser?.id, currentUser?.email]);
 
   // Compute live journals list
   const journals = useMemo(() => {

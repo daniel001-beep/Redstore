@@ -39,14 +39,84 @@ export default function DashboardClient({
 }: DashboardClientProps) {
   const { data: session } = useSession();
   const userEmail = session?.user?.email;
+  const userId = session?.user?.id;
 
   const [currency, setCurrency] = useState<'USD' | 'EUR' | 'NGN'>('USD');
   const [isSentinelActive, setIsSentinelActive] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const { addNotification } = useNotifications();
   const [invoices, setInvoices] = useState<any[]>([]);
+  // Fresh API transactions fetched client-side — always up-to-date
+  const [apiTransactions, setApiTransactions] = useState<UITransaction[]>(initialTransactions);
 
-  // Fetch invoices dynamically from Supabase
+  // Load from localStorage cache on mount for instant sub-0.1s loading
+  useEffect(() => {
+    if (userEmail) {
+      const cached = localStorage.getItem(`velox_cached_api_transactions_${userEmail}`);
+      if (cached) {
+        try {
+          setApiTransactions(JSON.parse(cached));
+        } catch (e) {
+          console.warn('Failed to parse cached dashboard transactions:', e);
+        }
+      }
+
+      const cachedInvoices = localStorage.getItem(`velox_cached_invoices_${userEmail}`);
+      if (cachedInvoices) {
+        try {
+          setInvoices(JSON.parse(cachedInvoices));
+        } catch (e) {
+          console.warn('Failed to parse cached dashboard invoices:', e);
+        }
+      }
+    }
+  }, [userEmail]);
+
+  // Fetch fresh transactions from the API on mount and after any change
+  // This is the primary data source — more reliable than stale server render
+  const fetchLatestTransactions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const mapped: UITransaction[] = data.map((tx: any) => {
+          const amountInDollars = Number(tx.amount) / 100;
+          let meta = tx.metadata;
+          if (typeof meta === 'string') {
+            try {
+              meta = JSON.parse(meta);
+            } catch (e) {}
+          }
+          return {
+            id: tx.id?.toString(),
+            type: amountInDollars > 0 ? 'CREDIT' : 'DEBIT',
+            description: meta?.description || tx.description || 'Transaction',
+            date: tx.createdAt ? new Date(tx.createdAt).toLocaleString() : new Date().toLocaleString(),
+            amount: amountInDollars,
+            status: tx.status?.toUpperCase() || 'COMPLETED',
+          };
+        });
+        setApiTransactions(mapped);
+        
+        // Cache the newly retrieved list
+        if (userEmail) {
+          localStorage.setItem(`velox_cached_api_transactions_${userEmail}`, JSON.stringify(mapped));
+        }
+      }
+    } catch (err) {
+      console.error('Dashboard: Failed to fetch transactions from API:', err);
+    }
+  }, [userEmail]);
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchLatestTransactions();
+    // Also refresh every 30 seconds to catch any changes
+    const interval = setInterval(fetchLatestTransactions, 30000);
+    return () => clearInterval(interval);
+  }, [fetchLatestTransactions]);
+
+  // Fetch invoices dynamically from Supabase (secondary source for real-time updates)
   useEffect(() => {
     const fetchInvoices = async () => {
       if (!supabase || !userEmail) return;
@@ -57,7 +127,7 @@ export default function DashboardClient({
           .eq('email', userEmail)
           .order('created_at', { ascending: false });
 
-        if (data) {
+        if (data && !error) {
           setInvoices(data);
         }
       } catch (err) {
@@ -67,7 +137,7 @@ export default function DashboardClient({
     fetchInvoices();
   }, [userEmail]);
 
-  // Real-time subscription to public invoices table changes
+  // Real-time subscription: re-fetch API transactions whenever an invoice changes
   useEffect(() => {
     if (!supabase || !userEmail) return;
 
@@ -77,28 +147,29 @@ export default function DashboardClient({
         'postgres_changes',
         { event: '*', schema: 'public', table: 'invoices' },
         async (payload) => {
-          // Re-fetch all invoices to get the absolute source of truth
+          // Re-fetch fresh transactions from our API (most reliable source)
+          await fetchLatestTransactions();
+
+          // Also re-fetch Supabase invoices directly
           try {
             const { data } = await supabase
               .from('invoices')
               .select('*')
               .eq('email', userEmail)
               .order('created_at', { ascending: false });
-            if (data) {
-              setInvoices(data);
-            }
-            
-            // Push a Sentinel alert notification if an invoice is created
-            if (payload.eventType === 'INSERT') {
-              const newInvoice = payload.new as any;
-              addNotification({
-                type: 'SENTINEL',
-                title: 'Sentinel Alert: New Ledger Entry',
-                message: `Detected invoice to ${newInvoice.client_name} of $${Number(newInvoice.amount).toLocaleString()}. Integrity verified.`,
-              });
-            }
+            if (data) setInvoices(data);
           } catch (err) {
             console.error('Error re-fetching invoices on dashboard:', err);
+          }
+
+          // Push a Sentinel alert notification if an invoice is created
+          if (payload.eventType === 'INSERT') {
+            const newInvoice = payload.new as any;
+            addNotification({
+              type: 'SENTINEL',
+              title: 'Sentinel Alert: New Ledger Entry',
+              message: `Detected invoice to ${newInvoice.client_name} of $${Number(newInvoice.amount).toLocaleString()}. Integrity verified.`,
+            });
           }
         }
       )
@@ -107,15 +178,14 @@ export default function DashboardClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [addNotification, userEmail]);
+  }, [addNotification, userEmail, fetchLatestTransactions]);
 
-  // Compute live visual states dynamically by merging initialTransactions (Drizzle Postgres ledger entries)
-  // and invoices (Supabase real-time invoices)
+  // Compute live visual states: merge API transactions (primary) with Supabase invoices (secondary)
   const transactions = useMemo<UITransaction[]>(() => {
     const mergedMap = new Map<string, UITransaction>();
 
-    // 1. Seed with initial Drizzle Postgres transactions from server
-    initialTransactions.forEach((tx) => {
+    // 1. Seed with fresh API transactions (Drizzle + Supabase fallback)
+    apiTransactions.forEach((tx) => {
       if (tx && tx.id) {
         mergedMap.set(tx.id.toString(), {
           ...tx,
@@ -124,18 +194,20 @@ export default function DashboardClient({
       }
     });
 
-    // 2. Merge Supabase invoices, overriding or adding new entries
+    // 2. Merge Supabase invoices, adding any entries not already in the map
     invoices.forEach((inv) => {
       if (inv && inv.id) {
         const idStr = inv.id.toString();
-        mergedMap.set(idStr, {
-          id: idStr,
-          type: inv.amount > 0 ? 'CREDIT' : 'DEBIT',
-          description: inv.description || `Invoice to ${inv.client_name}`,
-          date: inv.created_at ? new Date(inv.created_at).toLocaleString() : new Date().toLocaleString(),
-          amount: inv.amount || 0,
-          status: inv.status === 'Paid' ? 'COMPLETED' : 'PENDING'
-        });
+        if (!mergedMap.has(idStr)) {
+          mergedMap.set(idStr, {
+            id: idStr,
+            type: inv.amount > 0 ? 'CREDIT' : 'DEBIT',
+            description: inv.description || `Invoice to ${inv.client_name}`,
+            date: inv.created_at ? new Date(inv.created_at).toLocaleString() : new Date().toLocaleString(),
+            amount: inv.amount || 0,
+            status: inv.status === 'Paid' ? 'COMPLETED' : 'PENDING'
+          });
+        }
       }
     });
 
@@ -147,12 +219,13 @@ export default function DashboardClient({
       const timeB = b.date ? new Date(b.date).getTime() : 0;
       return timeB - timeA;
     });
-  }, [initialTransactions, invoices]);
+  }, [initialTransactions, apiTransactions, invoices]);
 
   const balance = useMemo(() => {
+    // Fall back to server-rendered initialBalance when there are no transactions
     if (transactions.length === 0) return initialBalance;
     return transactions
-      .filter((tx) => tx.status === 'COMPLETED' || !tx.status)
+      .filter((tx) => tx.status?.toUpperCase() === 'COMPLETED' || !tx.status)
       .reduce((acc, tx) => acc + (tx.amount || 0), 0);
   }, [transactions, initialBalance]);
 
@@ -163,7 +236,7 @@ export default function DashboardClient({
     return transactions
       .filter((tx) => {
         const txDate = tx.date ? new Date(tx.date) : new Date();
-        return txDate >= todayStart && (tx.status === 'COMPLETED' || !tx.status);
+        return txDate >= todayStart && (tx.status?.toUpperCase() === 'COMPLETED' || !tx.status);
       })
       .reduce((acc, tx) => acc + (tx.amount || 0), 0);
   }, [transactions, initialChange]);
@@ -236,7 +309,7 @@ export default function DashboardClient({
   };
 
   const gmvSum = transactions.reduce((acc, tx) => acc + (tx.amount || 0), 0);
-  const gpSum = transactions.filter(tx => tx.status === 'COMPLETED' || !tx.status).reduce((acc, tx) => acc + (tx.amount || 0), 0);
+  const gpSum = transactions.filter(tx => tx.status?.toUpperCase() === 'COMPLETED' || !tx.status).reduce((acc, tx) => acc + (tx.amount || 0), 0);
   const apSum = transactions.filter(tx => tx.amount < 0).reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
   const arSum = transactions.filter(tx => tx.status === 'PENDING' && tx.amount > 0).reduce((acc, tx) => acc + (tx.amount || 0), 0);
 

@@ -4,6 +4,7 @@ import { db } from '@/src/db';
 import { transactions } from '@/src/db/schema';
 import { desc, eq } from 'drizzle-orm';
 import { getResilientSession } from "@/src/lib/auth-session";
+import { createClient } from '@/src/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,10 +34,46 @@ export default async function LedgerPage() {
       };
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Database query timed out")), 8000)
+        setTimeout(() => reject(new Error("Database query timed out")), 3000)
       );
 
-      const dbTransactions = await Promise.race([fetchDbTransactions(), timeoutPromise]);
+      let dbTransactions: any[] = [];
+      try {
+        dbTransactions = await Promise.race([fetchDbTransactions(), timeoutPromise]);
+        // Succeeded! Reset circuit breaker
+        isDatabaseOffline = false;
+      } catch (timeoutErr) {
+        console.warn("⚠️ Drizzle query timed out during SSR, falling back to Supabase REST API.");
+        const userEmail = session?.user?.email;
+        if (userEmail) {
+          try {
+            const supabase = await createClient();
+            if (supabase) {
+              const { data: sbData, error: sbErr } = await supabase
+                .from('invoices')
+                .select('*')
+                .eq('email', userEmail)
+                .order('created_at', { ascending: false });
+              
+              if (!sbErr && sbData && sbData.length > 0) {
+                dbTransactions = sbData.map((inv: any) => ({
+                  id: inv.id?.toString(),
+                  userId: inv.user_id || userId,
+                  amount: (Number(inv.amount || 0) * 100).toString(), // convert to cents for uniformity
+                  status: inv.status === 'Paid' ? 'completed' : 'pending',
+                  createdAt: inv.created_at || new Date().toISOString(),
+                  metadata: {
+                    client_name: inv.client_name || 'Client',
+                    description: inv.description || 'Invoice',
+                  }
+                }));
+              }
+            }
+          } catch (sbErr) {
+            console.error("Failed to query Supabase fallback during SSR:", sbErr);
+          }
+        }
+      }
 
       realTransactions = dbTransactions.map(tx => {
         const amountInDollars = Number(tx.amount) / 100;
@@ -49,8 +86,6 @@ export default async function LedgerPage() {
           status: tx.status?.toUpperCase() || 'COMPLETED',
         };
       });
-      // Succeeded! Reset circuit breaker
-      isDatabaseOffline = false;
     } catch (err) {
       console.warn("⚠️ Ledger Database offline. Velox running seamlessly in Offline Demo Mode.");
       isDatabaseOffline = true;

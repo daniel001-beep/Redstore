@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       };
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Database query timed out")), 8000)
+        setTimeout(() => reject(new Error("Database query timed out")), 3000)
       );
 
       recentTransactions = await Promise.race([fetchDbTransactions(), timeoutPromise]);
@@ -49,13 +49,16 @@ export default async function DashboardPage() {
   }
 
   // Calculate real balance from transactions (dividing by 100 to convert cents to dollars)
-  const totalBalanceUsd = recentTransactions.reduce((acc, tx) => acc + (Number(tx.amount || 0) / 100), 0);
+  // Only sum completed transactions so that pending invoice requests don't inflate cash balances
+  const totalBalanceUsd = recentTransactions
+    .filter(tx => tx.status === 'completed' || tx.status === 'COMPLETED')
+    .reduce((acc, tx) => acc + (Number(tx.amount || 0) / 100), 0);
 
-  // Calculate today's change from transactions created today (dividing by 100 to convert cents to dollars)
+  // Calculate today's change from completed transactions created today (dividing by 100 to convert cents to dollars)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const dayChangeUsd = recentTransactions
-    .filter(tx => tx.createdAt && new Date(tx.createdAt) >= todayStart)
+    .filter(tx => (tx.status === 'completed' || tx.status === 'COMPLETED') && tx.createdAt && new Date(tx.createdAt) >= todayStart)
     .reduce((acc, tx) => acc + (Number(tx.amount || 0) / 100), 0);
   
   // Format for the UI (dividing by 100 to convert cents to dollars)
@@ -67,7 +70,7 @@ export default async function DashboardPage() {
       amount: amountInDollars,
       description: tx.metadata?.description || 'Transaction',
       date: tx.createdAt ? new Date(tx.createdAt).toLocaleString() : new Date().toLocaleString(),
-      status: tx.status as any,
+      status: tx.status?.toUpperCase() || 'COMPLETED',
     };
   });
 

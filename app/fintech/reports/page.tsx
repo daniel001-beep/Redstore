@@ -14,40 +14,70 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase-client';
+import { useSession } from '@/app/context/AuthContext';
 
 export default function ReportsPage() {
+  const { data: session } = useSession();
+  const userEmail = session?.user?.email;
+
   const [activeReport, setActiveReport] = useState<'income' | 'balance'>('income');
   const [reportingPeriod, setReportingPeriod] = useState('2025');
   const [invoices, setInvoices] = useState<any[]>([]);
 
-  // Fetch invoices (transactions) on mount
+  // Fetch invoices (transactions) on mount with instant localStorage cache fallback
   useEffect(() => {
+    // Load initial invoices from localStorage cache for sub-0.1s calculations rendering
+    if (userEmail) {
+      const cached = localStorage.getItem(`velox_cached_invoices_${userEmail}`);
+      if (cached) {
+        try {
+          setInvoices(JSON.parse(cached));
+        } catch (e) {}
+      }
+    }
+
     const fetchInvoices = async () => {
       try {
-        const res = await fetch('/api/ledger/transaction');
+        const res = await fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          // Map Drizzle transactions to client format
-          const mapped = data.map((tx: any) => ({
-            id: tx.id,
-            client_name: tx.metadata?.client_name || 'Client',
-            description: tx.metadata?.description || 'Transaction',
-            amount: Number(tx.amount) / 100, // cents to dollars
-            status: tx.status === 'completed' ? 'Paid' : 'Pending',
-            created_at: tx.createdAt
-          }));
+          // Map Drizzle transactions to client format safely parsing metadata
+          const mapped = data.map((tx: any) => {
+            let meta = tx.metadata;
+            if (typeof meta === 'string') {
+              try {
+                meta = JSON.parse(meta);
+              } catch (e) {}
+            }
+            return {
+              id: tx.id,
+              client_name: meta?.client_name || 'Client',
+              description: meta?.description || tx.description || 'Transaction',
+              amount: Number(tx.amount) / 100, // cents to dollars
+              status: tx.status === 'completed' ? 'Paid' : 'Pending',
+              created_at: tx.createdAt
+            };
+          });
           setInvoices(mapped);
+          
+          // Cache the fresh list for all other pages to use
+          if (userEmail) {
+            localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(mapped));
+          }
         }
       } catch (err) {
         console.error('Error fetching transactions for reports:', err);
       }
     };
     fetchInvoices();
-  }, []);
+  }, [userEmail]);
 
-  // Dynamic GAAP Calculations
+  // Dynamic GAAP Calculations (Cash-basis: only count Paid/completed invoices as revenue)
+  // Pending invoices are Accounts Receivable — they appear on the Balance Sheet, NOT the P&L
   const revenue = useMemo(() => {
-    return invoices.reduce((acc, inv) => acc + (inv.amount || 0), 0);
+    return invoices
+      .filter((inv) => inv.status === 'Paid')
+      .reduce((acc, inv) => acc + (inv.amount || 0), 0);
   }, [invoices]);
 
   const salaries = useMemo(() => {

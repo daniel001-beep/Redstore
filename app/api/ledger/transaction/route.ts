@@ -7,57 +7,21 @@ import { eq, desc } from 'drizzle-orm';
 import { transactionRateLimiter } from '@/src/lib/ratelimit';
 import { dispatchWebhook } from '@/src/lib/webhooks';
 import { cookies } from 'next/headers';
+import { getResilientSession } from "@/src/lib/auth-session";
+
 
 export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
-    const cookieStore = await cookies();
-    const localUserCookie = cookieStore.get('velox-local-user')?.value;
-    let userId = '';
-    let userEmail = '';
-
-    if (localUserCookie) {
-      try {
-        let val = decodeURIComponent(localUserCookie).trim();
-        if (val.startsWith('"') && val.endsWith('"')) {
-          val = val.slice(1, -1);
-        }
-        let localUser = JSON.parse(val);
-        if (typeof localUser === 'string') {
-          localUser = JSON.parse(localUser);
-        }
-        userId = localUser.id;
-        userEmail = localUser.email;
-      } catch (e) {
-        try {
-          let val = localUserCookie.trim();
-          if (val.startsWith('"') && val.endsWith('"')) {
-            val = val.slice(1, -1);
-          }
-          let localUser = JSON.parse(val);
-          if (typeof localUser === 'string') {
-            localUser = JSON.parse(localUser);
-          }
-          userId = localUser.id;
-          userEmail = localUser.email;
-        } catch (innerErr) {}
-      }
-    }
-
-    if (!userId) {
-      const supabase = await createClient();
-      const { data: { user: cloudUser } } = await supabase ? await supabase.auth.getUser() : { data: { user: null } };
-      if (cloudUser) {
-        userId = cloudUser.id;
-        userEmail = cloudUser.email || '';
-      }
-    }
+    const session = await getResilientSession();
+    const userId = session?.user?.id;
+    const userEmail = session?.user?.email;
 
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = { id: userId, email: userEmail };
+    const user = { id: userId, email: userEmail || '' };
 
     // 0. Rate Limiting Check
     if (!transactionRateLimiter.isAllowed(userId)) {
@@ -68,11 +32,11 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    const { amount, idempotencyKey, orderId, metadata, description } = body;
+    const { amount, idempotencyKey, orderId, metadata, description, status } = body;
 
     // Validate inputs
     const parsedAmount = Number(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    if (isNaN(parsedAmount) || parsedAmount === 0) {
       return NextResponse.json({ error: 'Valid amount is required (in cents/kobo)' }, { status: 400 });
     }
 
@@ -123,12 +87,12 @@ export async function POST(req: Request) {
             orderId: orderId || null,
             idempotencyKey,
             amount: amountBigInt,
-            status: 'completed',
+            status: status === 'Paid' ? 'completed' : 'pending',
             hash,
             previousHash,
             metadata: metadata || {},
             createdAt: timestamp,
-            completedAt: timestamp,
+            completedAt: status === 'Paid' ? timestamp : null,
           }).returning();
 
           // 5. Insert double-entry ledger records
@@ -170,17 +134,22 @@ export async function POST(req: Request) {
 
       // Sync to Supabase 'invoices' table to trigger Sentinel & real-time dashboard updates
       try {
-        const { supabase } = await import('@/src/lib/supabase-client');
-        if (supabase && user.email) {
-          await supabase.from('invoices').insert({
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/^["'()]+|["'()]+$/g, "").trim();
+        const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)?.replace(/^["'()]+|["'()]+$/g, "").trim();
+
+        if (supabaseUrl && supabaseServiceKey && user.email) {
+          const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+          const supabaseAdmin = createSupabaseClient(supabaseUrl, supabaseServiceKey);
+          
+          await supabaseAdmin.from('invoices').insert({
             client_name: metadata?.client_name || 'Client',
             description: description || 'Ledger transaction',
             amount: Number(amountBigInt) / 100, // cents to dollars
-            status: 'Paid',
+            status: status || 'Pending',
             email: user.email,
             user_id: userId,
           });
-          console.log(`[Supabase] Synced invoice to Supabase for ${user.email}`);
+          console.log(`[Supabase] Synced invoice to Supabase with status ${status || 'Pending'} for ${user.email}`);
         }
       } catch (supabaseErr) {
         console.error('[Supabase] Failed to sync invoice to Supabase:', supabaseErr);
@@ -211,90 +180,94 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const cookieStore = await cookies();
-    const localUserCookie = cookieStore.get('velox-local-user')?.value;
-    let userId = '';
-
-    if (localUserCookie) {
-      try {
-        let val = decodeURIComponent(localUserCookie).trim();
-        if (val.startsWith('"') && val.endsWith('"')) {
-          val = val.slice(1, -1);
-        }
-        let localUser = JSON.parse(val);
-        if (typeof localUser === 'string') {
-          localUser = JSON.parse(localUser);
-        }
-        userId = localUser.id;
-      } catch (e) {
-        try {
-          let val = localUserCookie.trim();
-          if (val.startsWith('"') && val.endsWith('"')) {
-            val = val.slice(1, -1);
-          }
-          let localUser = JSON.parse(val);
-          if (typeof localUser === 'string') {
-            localUser = JSON.parse(localUser);
-          }
-          userId = localUser.id;
-        } catch (innerErr) {}
-      }
-    }
-
-    if (!userId) {
-      const supabase = await createClient();
-      const { data: { user: cloudUser } } = await supabase ? await supabase.auth.getUser() : { data: { user: null } };
-      if (cloudUser) {
-        userId = cloudUser.id;
-      }
-    }
+    const session = await getResilientSession();
+    const userId = session?.user?.id;
+    const userEmail = session?.user?.email;
 
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch user's transactions only
-    let userTransactions: any[] = [];
-    try {
-      userTransactions = await db.query.transactions.findMany({
-        where: eq(transactions.userId, userId),
-        orderBy: [desc(transactions.createdAt)],
-      });
-    } catch (drizzleErr) {
-      console.warn('[GET Transactions] Drizzle query failed, falling back to Supabase REST API:', drizzleErr);
-    }
+    // 1. Define the Drizzle fetch with a resilient 5000ms timeout
+    const fetchDrizzleTransactions = async (): Promise<any[]> => {
+      try {
+        const drizzleQuery = db.query.transactions.findMany({
+          where: eq(transactions.userId, userId),
+          orderBy: [desc(transactions.createdAt)],
+        });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Drizzle query timed out")), 5000)
+        );
+        return await Promise.race([drizzleQuery, timeoutPromise]);
+      } catch (drizzleErr) {
+        console.warn('[GET Transactions] Drizzle query failed or timed out:', drizzleErr);
+        return [];
+      }
+    };
 
-    // If transactions from Drizzle are empty, let's also fetch from Supabase 'invoices' REST API to ensure persistence on ephemeral environments like Vercel!
-    if (userTransactions.length === 0) {
+    // 2. Define the Supabase fetch
+    const fetchSupabaseTransactions = async (): Promise<any[]> => {
+      if (!userEmail) return [];
       try {
         const { supabase } = await import('@/src/lib/supabase-client');
-        if (supabase) {
-          const { data: supabaseInvoices, error: supabaseErr } = await supabase
-            .from('invoices')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+        if (!supabase) return [];
+        
+        const { data: supabaseInvoices, error: supabaseErr } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('email', userEmail)
+          .order('created_at', { ascending: false });
 
-          if (!supabaseErr && supabaseInvoices && supabaseInvoices.length > 0) {
-            console.log(`[GET Transactions] Fetched ${supabaseInvoices.length} invoices from Supabase REST API fallback`);
-            const mappedInvoices = supabaseInvoices.map((inv: any) => ({
-              id: inv.id || `tx_${Math.random().toString(36).substring(2, 11)}`,
-              userId: inv.user_id || userId,
-              amount: (Number(inv.amount || 0) * 100).toString(),
-              status: inv.status === 'Paid' ? 'completed' : 'pending',
-              createdAt: inv.created_at || new Date().toISOString(),
-              metadata: {
-                client_name: inv.client_name || 'Client',
-                description: inv.description || 'Invoice',
-              }
-            }));
-            userTransactions = mappedInvoices;
-          }
+        if (!supabaseErr && supabaseInvoices && supabaseInvoices.length > 0) {
+          return supabaseInvoices.map((inv: any) => ({
+            id: inv.id?.toString() || `sb_${Math.random().toString(36).substring(2, 11)}`,
+            userId: inv.user_id || userId,
+            amount: (Number(inv.amount || 0) * 100).toString(), // convert to cents for API uniformity
+            status: inv.status === 'Paid' ? 'completed' : 'pending',
+            createdAt: inv.created_at || new Date().toISOString(),
+            metadata: {
+              client_name: inv.client_name || 'Client',
+              description: inv.description || 'Invoice',
+            }
+          }));
         }
       } catch (err) {
-        console.error('[GET Transactions] Failed to fetch fallback invoices from Supabase:', err);
+        console.error('[GET Transactions] Failed to fetch invoices from Supabase:', err);
       }
-    }
+      return [];
+    };
+
+    // 3. Execute both concurrently to prevent blocking and ensure instant return
+    const [drizzleTransactions, supabaseInvoicesMapped] = await Promise.all([
+      fetchDrizzleTransactions(),
+      fetchSupabaseTransactions()
+    ]);
+
+    // 3. Merge both Drizzle and Supabase lists to avoid duplicates and ensure perfect UI alignment
+    const mergedMap = new Map<string, any>();
+    
+    // Seed with Drizzle transactions first
+    drizzleTransactions.forEach((tx) => {
+      if (tx && tx.id) {
+        mergedMap.set(tx.id.toString(), tx);
+      }
+    });
+
+    // Merge Supabase invoices, keeping or updating
+    supabaseInvoicesMapped.forEach((inv) => {
+      if (inv && inv.id) {
+        const idStr = inv.id.toString();
+        if (!mergedMap.has(idStr)) {
+          mergedMap.set(idStr, inv);
+        }
+      }
+    });
+
+    const userTransactions = Array.from(mergedMap.values()).sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.created_at).getTime();
+      const timeB = new Date(b.createdAt || b.created_at).getTime();
+      return timeB - timeA;
+    });
 
     // Serialize BigInt safely for JSON
     const serialized = JSON.parse(

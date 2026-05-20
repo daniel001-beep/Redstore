@@ -48,7 +48,7 @@ export default function RunwayClient({ initialTransactions = [] }: RunwayClientP
 
   return (
     <DashboardLayout>
-      <div className="pt-4 px-6 animate-in fade-in duration-500 max-w-7xl mx-auto space-y-8">
+      <div className="pt-4 px-0 xs:px-2 sm:px-4 animate-in fade-in duration-500 max-w-7xl mx-auto space-y-8">
         
         {/* Header Block */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-200">

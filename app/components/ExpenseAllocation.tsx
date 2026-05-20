@@ -14,14 +14,15 @@ interface ExpenseAllocationProps {
 }
 
 export default function ExpenseAllocation({ transactions = [] }: ExpenseAllocationProps) {
-  let salaries = 624991.78;
-  let utilities = 349665.01;
-  let marketing = 250547.37;
-  let other = 151429.72;
+  // Start all categories at 0 — no fake/mock data
+  let salaries = 0;
+  let utilities = 0;
+  let marketing = 0;
+  let other = 0;
 
   transactions.forEach(tx => {
     if (tx.amount < 0) {
-      const desc = tx.description.toLowerCase();
+      const desc = (tx.description || '').toLowerCase();
       const amt = Math.abs(tx.amount);
       if (desc.includes('salary') || desc.includes('payroll')) {
         salaries += amt;
@@ -37,16 +38,14 @@ export default function ExpenseAllocation({ transactions = [] }: ExpenseAllocati
 
   const totalExpenses = salaries + utilities + marketing + other;
 
+  // If no expense transactions exist, show an empty neutral ring
   const data = totalExpenses > 0 ? [
     { name: 'Salaries', value: Math.round((salaries / totalExpenses) * 1000) / 10, color: '#0052cc' },
     { name: 'Rent & Utilities', value: Math.round((utilities / totalExpenses) * 1000) / 10, color: '#00b4d8' },
     { name: 'Marketing', value: Math.round((marketing / totalExpenses) * 1000) / 10, color: '#7209b7' },
     { name: 'Inventory & Other', value: Math.round((other / totalExpenses) * 1000) / 10, color: '#f72585' },
   ].filter(d => d.value > 0) : [
-    { name: 'Salaries', value: 0, color: '#0052cc' },
-    { name: 'Rent & Utilities', value: 0, color: '#00b4d8' },
-    { name: 'Marketing', value: 0, color: '#7209b7' },
-    { name: 'Inventory & Other', value: 0, color: '#f72585' },
+    { name: 'No Data', value: 100, color: '#e2e8f0' },
   ];
 
   return (
@@ -92,7 +91,7 @@ export default function ExpenseAllocation({ transactions = [] }: ExpenseAllocati
 
         {/* Legend: Sleek 2x2 Grid that avoids squishing */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 mt-2">
-          {data.map((item) => (
+          {totalExpenses > 0 ? data.map((item) => (
             <div key={item.name} className="flex flex-col gap-1.5">
               <div className="flex justify-between items-center text-xs">
                 <div className="flex items-center gap-1.5 min-w-0">
@@ -114,7 +113,12 @@ export default function ExpenseAllocation({ transactions = [] }: ExpenseAllocati
                 />
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="col-span-2 text-center py-2">
+              <p className="text-xs text-slate-400 font-semibold">No expense transactions yet</p>
+              <p className="text-[10px] text-slate-300 mt-0.5">Expenses will appear here automatically</p>
+            </div>
+          )}
         </div>
       </div>
 

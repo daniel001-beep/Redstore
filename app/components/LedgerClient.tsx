@@ -14,6 +14,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase-client';
+import { useSession } from '@/app/context/AuthContext';
 
 export interface UITransaction {
   id: string;
@@ -41,6 +42,8 @@ const fallbackInvoices: DbInvoice[] = [];
 
 export default function LedgerClient({ initialTransactions = [] }: LedgerClientProps) {
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('create'); // Start on the uploaded Create Invoice screen by default!
+  const { data: session } = useSession();
+  const userEmail = session?.user?.email;
 
   // Invoice list data (dynamic state array backed by Supabase with clean baseline defaults)
   const [invoices, setInvoices] = useState<DbInvoice[]>(fallbackInvoices);
@@ -70,42 +73,122 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
 
   const [searchQuery, setSearchQuery] = useState('');
 
-  // --- DRIZZLE LEDGER DATA FETCH ---
+  // --- DATA FETCH FROM BOTH DRIZZLE AND SUPABASE ---
+  // Load initial invoices from localStorage cache for instant 0.1s navigation
   useEffect(() => {
-    const fetchInvoices = async () => {
+    if (userEmail) {
+      const cached = localStorage.getItem(`velox_cached_invoices_${userEmail}`);
+      if (cached) {
+        try {
+          setInvoices(JSON.parse(cached));
+        } catch (e) {
+          console.warn('Failed to parse cached invoices:', e);
+        }
+      }
+    }
+  }, [userEmail]);
+
+  useEffect(() => {
+    let active = true;
+    const fetchInvoicesAndTransactions = async () => {
       setLoading(true);
+      // Safety timeout: if fetching takes > 1.5 seconds, unblock UI so cached invoices are immediately interactive
+      const safetyTimeout = setTimeout(() => {
+        if (active) {
+          setLoading(false);
+        }
+      }, 1500);
+
       try {
-        const res = await fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          // Map Drizzle transactions to DbInvoice interface
-          const mapped = data.map((tx: any) => {
-            let meta = tx.metadata;
-            if (typeof meta === 'string') {
-              try {
-                meta = JSON.parse(meta);
-              } catch (e) {}
+        // 1. Fetch from Drizzle API
+        let drizzleMapped: DbInvoice[] = [];
+        try {
+          const res = await fetch('/api/ledger/transaction?_t=' + Date.now(), { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            drizzleMapped = data.map((tx: any) => {
+              let meta = tx.metadata;
+              if (typeof meta === 'string') {
+                try {
+                  meta = JSON.parse(meta);
+                } catch (e) {}
+              }
+              return {
+                id: tx.id?.toString(),
+                client_name: meta?.client_name || 'Client',
+                description: meta?.description || tx.description || 'Transaction',
+                amount: Number(tx.amount) / 100, // Convert from cents
+                status: tx.status === 'completed' ? 'Paid' : 'Pending',
+                created_at: tx.createdAt
+              };
+            });
+          }
+        } catch (drizzleErr) {
+          console.error('Error fetching drizzle transactions:', drizzleErr);
+        }
+
+        // 2. Fetch from Supabase directly if available
+        let supabaseMapped: DbInvoice[] = [];
+        if (supabase && userEmail) {
+          try {
+            const { data, error } = await supabase
+              .from('invoices')
+              .select('*')
+              .eq('email', userEmail)
+              .order('created_at', { ascending: false });
+            if (data && !error) {
+              supabaseMapped = data.map((inv: any) => ({
+                id: inv.id?.toString(),
+                client_name: inv.client_name || 'Client',
+                description: inv.description || `Invoice to ${inv.client_name}`,
+                amount: Number(inv.amount || 0),
+                status: inv.status === 'Paid' ? 'Paid' : 'Pending',
+                created_at: inv.created_at
+              }));
             }
-            return {
-              id: tx.id,
-              client_name: meta?.client_name || 'Client',
-              description: meta?.description || tx.description || 'Transaction',
-              amount: Number(tx.amount) / 100, // Convert from cents
-              status: tx.status === 'completed' ? 'Paid' : 'Pending',
-              created_at: tx.createdAt
-            };
-          });
-          setInvoices(mapped);
+          } catch (sbErr) {
+            console.error('Error fetching supabase invoices:', sbErr);
+          }
+        }
+
+        // 3. Merge them using Map to prevent duplicates
+        const mergedMap = new Map<string, DbInvoice>();
+        drizzleMapped.forEach(item => {
+          if (item.id) mergedMap.set(item.id, item);
+        });
+        supabaseMapped.forEach(item => {
+          if (item.id) mergedMap.set(item.id, item);
+        });
+
+        const mergedList = Array.from(mergedMap.values()).sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return dateB - dateA;
+        });
+
+        if (active) {
+          setInvoices(mergedList);
+          
+          // Cache the newly retrieved list
+          if (userEmail) {
+            localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(mergedList));
+          }
         }
       } catch (err) {
         console.error('Unexpected error fetching invoices:', err);
       } finally {
-        setLoading(false);
+        clearTimeout(safetyTimeout);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchInvoices();
-  }, [activeTab]);
+    fetchInvoicesAndTransactions();
+    return () => {
+      active = false;
+    };
+  }, [activeTab, userEmail]);
 
   // Live calculations for total value
   const totalAmount = useMemo(() => {
@@ -185,6 +268,49 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    
+    // Construct the new invoice dynamically for instant Optimistic UI rendering
+    const newInvoice: DbInvoice = {
+      id: `inv_temp_${Date.now()}`,
+      client_name: clientName,
+      description: description,
+      amount: parseFloat(amount),
+      status: status,
+      created_at: new Date().toISOString()
+    };
+
+    // Map to UITransaction structure for instant Dashboard synchronization
+    const newUiTx = {
+      id: newInvoice.id,
+      type: newInvoice.amount > 0 ? 'CREDIT' : 'DEBIT',
+      description: newInvoice.description || `Invoice to ${newInvoice.client_name}`,
+      date: new Date().toLocaleString(),
+      amount: newInvoice.amount,
+      status: newInvoice.status === 'Paid' ? 'COMPLETED' : 'PENDING'
+    };
+
+    // Prepend the new invoice to state instantly
+    setInvoices(prev => {
+      const updated = [newInvoice, ...prev];
+      if (userEmail) {
+        localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(updated));
+        
+        // Synchronously update the Dashboard's transaction cache too!
+        const cachedTxStr = localStorage.getItem(`velox_cached_api_transactions_${userEmail}`);
+        let cachedTxs = [];
+        if (cachedTxStr) {
+          try {
+            cachedTxs = JSON.parse(cachedTxStr);
+          } catch (e) {}
+        }
+        localStorage.setItem(`velox_cached_api_transactions_${userEmail}`, JSON.stringify([newUiTx, ...cachedTxs]));
+      }
+      return updated;
+    });
+
+    // Switch tab instantly (within 0.05 seconds!)
+    setActiveTab('list');
+
     try {
       const res = await fetch('/api/ledger/transaction', {
         method: 'POST',
@@ -195,6 +321,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
           amount: Math.round(parseFloat(amount) * 100), // convert to cents
           idempotencyKey: `inv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           description: description,
+          status: status,
           metadata: {
             client_name: clientName,
             description: description,
@@ -204,16 +331,76 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
 
       if (!res.ok) {
         const errData = await res.json();
+        // Rollback optimistic update on failure
+        setInvoices(prev => {
+          const updated = prev.filter(inv => inv.id !== newInvoice.id);
+          if (userEmail) {
+            localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(updated));
+            
+            const cachedTxStr = localStorage.getItem(`velox_cached_api_transactions_${userEmail}`);
+            if (cachedTxStr) {
+              try {
+                const cachedTxs = JSON.parse(cachedTxStr);
+                const filtered = cachedTxs.filter((tx: any) => tx.id !== newInvoice.id);
+                localStorage.setItem(`velox_cached_api_transactions_${userEmail}`, JSON.stringify(filtered));
+              } catch (e) {}
+            }
+          }
+          return updated;
+        });
         alert(`Failed to save transaction: ${errData.error}`);
       } else {
-        setActiveTab('list');
         // Reset fields
         setDescription('');
-        setClientName('');
+        setClientName('ABC Ltd');
         setAmount('0.00');
+        setStatus('Pending');
+
+        // Swap out temporary ID with the real ID from response quietly
+        const data = await res.json();
+        const createdTx = data.transaction;
+        if (createdTx && createdTx.id) {
+          setInvoices(prev => {
+            const updated = prev.map(inv => 
+              inv.id === newInvoice.id ? { ...inv, id: createdTx.id.toString() } : inv
+            );
+            if (userEmail) {
+              localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(updated));
+              
+              const cachedTxStr = localStorage.getItem(`velox_cached_api_transactions_${userEmail}`);
+              if (cachedTxStr) {
+                try {
+                  const cachedTxs = JSON.parse(cachedTxStr);
+                  const updatedTxs = cachedTxs.map((tx: any) => 
+                    tx.id === newInvoice.id ? { ...tx, id: createdTx.id.toString() } : tx
+                  );
+                  localStorage.setItem(`velox_cached_api_transactions_${userEmail}`, JSON.stringify(updatedTxs));
+                } catch (e) {}
+              }
+            }
+            return updated;
+          });
+        }
       }
     } catch (err: any) {
       console.error('Unexpected error on submit:', err);
+      // Rollback optimistic update on exception
+      setInvoices(prev => {
+        const updated = prev.filter(inv => inv.id !== newInvoice.id);
+        if (userEmail) {
+          localStorage.setItem(`velox_cached_invoices_${userEmail}`, JSON.stringify(updated));
+          
+          const cachedTxStr = localStorage.getItem(`velox_cached_api_transactions_${userEmail}`);
+          if (cachedTxStr) {
+            try {
+              const cachedTxs = JSON.parse(cachedTxStr);
+              const filtered = cachedTxs.filter((tx: any) => tx.id !== newInvoice.id);
+              localStorage.setItem(`velox_cached_api_transactions_${userEmail}`, JSON.stringify(filtered));
+            } catch (e) {}
+          }
+        }
+        return updated;
+      });
       alert(`An error occurred: ${err.message || err}`);
     } finally {
       setIsSubmitting(false);
@@ -254,7 +441,15 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
-              <h1 className="text-3xl font-black text-blue-600 tracking-tight">Financial Documents</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-black text-blue-600 tracking-tight">Financial Documents</h1>
+                {loading && invoices.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-100/50 shadow-sm animate-pulse">
+                    <span className="inline-block w-2 h-2 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></span>
+                    Syncing...
+                  </span>
+                )}
+              </div>
               <p className="text-slate-400 text-sm mt-1">Audit and generate invoices and billing documents</p>
             </div>
             <button 
@@ -268,7 +463,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
 
           {/* Real-time Financial Calculations Stat Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-            <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm relative overflow-hidden" style={{ padding: '32px' }}>
+            <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm relative overflow-hidden p-4 xs:p-6 sm:p-8">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Gross Revenue</p>
               <h3 className="text-3xl font-black text-emerald-600 font-mono">
                 ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -276,7 +471,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
               <p className="text-slate-400 text-xs mt-2 font-medium">Sum of paid invoices dynamically computed via .reduce()</p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm relative overflow-hidden" style={{ padding: '32px' }}>
+            <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm relative overflow-hidden p-4 xs:p-6 sm:p-8">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Income Statement (Net Income)</p>
               <h3 className="text-3xl font-black text-blue-600 font-mono">
                 ${netIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -286,7 +481,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
           </div>
 
           {/* Search Card replicating image 2 */}
-          <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between" style={{ padding: '32px' }}>
+          <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between p-4 xs:p-6 sm:p-8">
             <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -318,7 +513,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
           </div>
 
           {/* Invoice List Table card replicating image 2 */}
-          <div className="bg-white border border-slate-200 rounded-[24px] overflow-hidden shadow-sm" style={{ padding: '40px' }}>
+          <div className="bg-white border border-slate-200 rounded-[24px] overflow-hidden shadow-sm p-4 xs:p-6 sm:p-8 md:p-10">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -331,7 +526,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {loading ? (
+                  {loading && invoices.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-slate-500 font-semibold text-xs">
                         <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></span>
@@ -393,7 +588,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
           </div>
 
           {/* Main Form Fields Card */}
-          <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm" style={{ padding: '32px' }}>
+          <div className="bg-white border border-slate-200 rounded-[24px] shadow-sm p-4 xs:p-6 sm:p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               {/* Request Number (Disabled mock) */}
@@ -517,7 +712,7 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
           </div>
 
           {/* Itemized Calculation Grid Card (Exact match of table in Image 3!) */}
-          <div className="bg-white border border-slate-200 rounded-[24px] overflow-hidden shadow-sm" style={{ padding: '40px' }}>
+          <div className="bg-white border border-slate-200 rounded-[24px] overflow-hidden shadow-sm p-3 xs:p-5 sm:p-8 md:p-10">
             <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
               <h2 className="text-base font-bold text-slate-800">Invoice Items & Taxes</h2>
               <button
@@ -601,16 +796,16 @@ export default function LedgerClient({ initialTransactions = [] }: LedgerClientP
             </div>
 
             {/* Summation Total Summary */}
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col items-end gap-2 text-xs font-semibold text-slate-600">
-              <div className="flex justify-between w-64">
+            <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-100 flex flex-col items-stretch sm:items-end gap-2 text-xs font-semibold text-slate-600">
+              <div className="flex justify-between w-full sm:w-64">
                 <span>Subtotal (Tax Base):</span>
                 <span className="font-mono text-slate-800">${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="flex justify-between w-64">
+              <div className="flex justify-between w-full sm:w-64">
                 <span>Value Added Tax (12%):</span>
                 <span className="font-mono text-slate-800">${(totalAmount * 0.12).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="flex justify-between w-64 pt-2 border-t border-slate-200 text-sm font-bold text-slate-800">
+              <div className="flex justify-between w-full sm:w-64 pt-2 border-t border-slate-200 text-sm font-bold text-slate-800">
                 <span>Grand Total:</span>
                 <span className="font-mono text-blue-600">${(totalAmount * 1.12).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
               </div>

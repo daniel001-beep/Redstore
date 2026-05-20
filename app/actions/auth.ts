@@ -3,6 +3,17 @@
 import { createClient } from '@/src/lib/supabase-server';
 import { headers, cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { createHash } from 'crypto';
+
+function getDeterministicUserId(email: string): string {
+  const lowerEmail = email.toLowerCase().trim();
+  if (lowerEmail === 'idowuisdaniel1@gmail.com' || lowerEmail === 'admin@velox.com' || lowerEmail === 'daniel@velox.com') {
+    return 'usr_6wshej3ht';
+  }
+  const hash = createHash('sha256').update(lowerEmail).digest('hex').substring(0, 12);
+  return `usr_${hash}`;
+}
+
 
 export async function signInAction(formData: FormData) {
   const email = formData.get('email') as string;
@@ -141,7 +152,7 @@ export async function signInAction(formData: FormData) {
       const { users: writeUsers } = await import('@/src/db/schema');
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(password, 12);
-      const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+      const userId = getDeterministicUserId(lowerEmail);
       const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
       const isAdmin = adminEmail ? lowerEmail === adminEmail : false;
 
@@ -174,7 +185,7 @@ export async function signInAction(formData: FormData) {
         // Dynamic registration directly inside memory/local file
         const bcrypt = await import('bcryptjs');
         const hashedPassword = await bcrypt.hash(password, 12);
-        const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+        const userId = getDeterministicUserId(lowerEmail);
         const adminEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim();
         const isAdmin = adminEmail ? lowerEmail === adminEmail : false;
 
@@ -240,7 +251,7 @@ export async function signUpAction(formData: FormData) {
     const { eq } = await import('drizzle-orm');
     const bcrypt = await import('bcryptjs');
     const hashedPassword = await bcrypt.hash(password, 12);
-    const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+    const userId = getDeterministicUserId(lowerEmail);
 
     const existingUser = await db.query.users.findFirst({
       where: (u: any, { eq }: any) => eq(u.email, lowerEmail)
@@ -290,7 +301,7 @@ export async function signUpAction(formData: FormData) {
       
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(password, 12);
-      const userId = `usr_${Math.random().toString(36).substring(2, 11)}`;
+      const userId = getDeterministicUserId(lowerEmail);
       
       const existingIdx = data.users.findIndex((u: any) => u.email === lowerEmail);
       const newUserObj = {

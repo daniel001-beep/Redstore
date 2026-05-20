@@ -241,6 +241,14 @@ function emulateSqlQuery(sql: string, params: any[]) {
 
   console.log(`[Resilient DB] Emulating SQL query locally on table "${table}": ${sql.slice(0, 120)}...`);
 
+  // Robust parameter index finder matching quotes, prefixes, and aliases (e.g. "transaction"."user_id" = $1)
+  const getParamIndex = (clause: string, colName: string): number | null => {
+    const escapedCol = colName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(?:"?\\w+"?\\.)?"?${escapedCol}"?\\s*=\\s*\\$(\\d+)`, 'i');
+    const match = clause.match(regex);
+    return match ? parseInt(match[1]) - 1 : null;
+  };
+
   // 1. SELECT "user"
   if (sqlLower.includes('select') && table === 'user') {
     let result = db.users.map(u => ({
@@ -254,17 +262,14 @@ function emulateSqlQuery(sql: string, params: any[]) {
     }));
     const whereClause = sqlLower.split('where')[1] || "";
     
-    // Scrape correct parameter dynamically based on column order
-    const emailMatch = whereClause.match(/email\s*=\s*\$(\d+)/i);
-    const idMatch = whereClause.match(/id\s*=\s*\$(\d+)/i);
+    const emailIdx = getParamIndex(whereClause, 'email');
+    const idIdx = getParamIndex(whereClause, 'id');
     
-    if (emailMatch) {
-      const idx = parseInt(emailMatch[1]) - 1;
-      const email = params[idx]?.toLowerCase().trim();
+    if (emailIdx !== null && emailIdx >= 0 && emailIdx < params.length) {
+      const email = params[emailIdx]?.toLowerCase().trim();
       result = result.filter(u => u.email?.toLowerCase().trim() === email);
-    } else if (idMatch) {
-      const idx = parseInt(idMatch[1]) - 1;
-      const id = params[idx];
+    } else if (idIdx !== null && idIdx >= 0 && idIdx < params.length) {
+      const id = params[idIdx];
       result = result.filter(u => u.id === id);
     }
     if (sqlLower.includes('limit $') || sqlLower.includes('limit 1')) {
@@ -309,17 +314,14 @@ function emulateSqlQuery(sql: string, params: any[]) {
     });
     const whereClause = sqlLower.split('where')[1] || "";
     
-    // Scrape correct parameter dynamically based on column order
-    const userMatch = whereClause.match(/user_id\s*=\s*\$(\d+)/i);
-    const idempMatch = whereClause.match(/idempotency_key\s*=\s*\$(\d+)/i);
+    const userIdx = getParamIndex(whereClause, 'user_id') ?? getParamIndex(whereClause, 'userid');
+    const idempIdx = getParamIndex(whereClause, 'idempotency_key') ?? getParamIndex(whereClause, 'idempotencykey');
     
-    if (userMatch) {
-      const idx = parseInt(userMatch[1]) - 1;
-      const userId = params[idx];
+    if (userIdx !== null && userIdx >= 0 && userIdx < params.length) {
+      const userId = params[userIdx];
       result = result.filter(t => t.userId === userId || t.user_id === userId);
-    } else if (idempMatch) {
-      const idx = parseInt(idempMatch[1]) - 1;
-      const key = params[idx];
+    } else if (idempIdx !== null && idempIdx >= 0 && idempIdx < params.length) {
+      const key = params[idempIdx];
       result = result.filter(t => t.idempotencyKey === key || t.idempotency_key === key);
     }
     if (sqlLower.includes('order by') && sqlLower.includes('created_at') && sqlLower.includes('desc')) {
@@ -348,17 +350,14 @@ function emulateSqlQuery(sql: string, params: any[]) {
     }));
     const whereClause = sqlLower.split('where')[1] || "";
     
-    // Scrape correct parameter dynamically based on column order
-    const userMatch = whereClause.match(/user_id\s*=\s*\$(\d+)/i);
-    const txMatch = whereClause.match(/transaction_id\s*=\s*\$(\d+)/i);
+    const userIdx = getParamIndex(whereClause, 'user_id') ?? getParamIndex(whereClause, 'userid');
+    const txIdx = getParamIndex(whereClause, 'transaction_id') ?? getParamIndex(whereClause, 'transactionid');
     
-    if (userMatch) {
-      const idx = parseInt(userMatch[1]) - 1;
-      const userId = params[idx];
+    if (userIdx !== null && userIdx >= 0 && userIdx < params.length) {
+      const userId = params[userIdx];
       result = result.filter(e => e.userId === userId || e.user_id === userId);
-    } else if (txMatch) {
-      const idx = parseInt(txMatch[1]) - 1;
-      const txId = params[idx];
+    } else if (txIdx !== null && txIdx >= 0 && txIdx < params.length) {
+      const txId = params[txIdx];
       result = result.filter(e => e.transactionId === txId || e.transaction_id === txId);
     }
     return result;
@@ -559,17 +558,14 @@ function emulateSqlQuery(sql: string, params: any[]) {
     let userIndex = -1;
     const whereClause = sqlLower.split('where')[1] || "";
     
-    // Find correct param dynamically
-    const idMatch = whereClause.match(/id\s*=\s*\$(\d+)/i);
-    const emailMatch = whereClause.match(/email\s*=\s*\$(\d+)/i);
+    const idIdx = getParamIndex(whereClause, 'id');
+    const emailIdx = getParamIndex(whereClause, 'email');
     
-    if (idMatch) {
-      const idx = parseInt(idMatch[1]) - 1;
-      const id = params[idx];
+    if (idIdx !== null && idIdx >= 0 && idIdx < params.length) {
+      const id = params[idIdx];
       userIndex = db.users.findIndex(u => u.id === id);
-    } else if (emailMatch) {
-      const idx = parseInt(emailMatch[1]) - 1;
-      const email = params[idx]?.toLowerCase().trim();
+    } else if (emailIdx !== null && emailIdx >= 0 && emailIdx < params.length) {
+      const email = params[emailIdx]?.toLowerCase().trim();
       userIndex = db.users.findIndex(u => u.email?.toLowerCase().trim() === email);
     } else {
       // Fallback to last parameter
